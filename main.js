@@ -111,90 +111,6 @@ function sigmod(x) {
     return 1 / (1 + Math.exp(-x));
 }
 
-function _dependencyCount(key, map, countMap = new Map()) {
-    const storedDependencyCount = countMap.get(key);
-
-    if (storedDependencyCount != null || storedDependencyCount != undefined) {
-        return storedDependencyCount;
-    }
-
-    let count = 0;
-    for (const childKey of map.get(key)) {
-        count += 1 + dependencyCount(childKey, map, countMap);
-    }
-
-    return count;
-}
-
-function dependencyCount(value, iterChildrenCallback, countMap = new Map()) {
-    const storedDependencyCount = countMap.get(value);
-
-    if (storedDependencyCount != null || storedDependencyCount != undefined) {
-        return storedDependencyCount;
-    }
-
-    // let count = 0;
-    // iterChildrenCallback(child => {
-    //     count += 1 + dependencyCount(child, iterChildrenCallback, countMap);
-    // });
-
-    const children = iterChildrenCallback(value);
-    // // for (let idx = 0; idx < children.length; ++idx) {
-    for (const child of children) {
-        count += 1 + dependencyCount(child, iterChildrenCallback, countMap);
-    }
-
-    storedDependencyCount.set(value, count);
-    return count;
-}
-
-// function sortMapByDependencyCount(map = new Map()) {
-//     const countMap = new Map();
-//     return [ ... map.keys() ].sort((key0, key1) => {
-//         const dependencyCount0 = dependencyCount(key0, map, countMap);
-//         const dependencyCount1 = dependencyCount(key1, map, countMap);
-//         return dependencyCount0 - dependencyCount1;
-//     });
-// }
-
-function sortByDependencyCount(values = [], iterChildrenCallback) {
-    const countMap = new Map();
-    return values.toSorted((value0, value1) => {
-        const dependencyCount0 = dependencyCount(value0, iterChildrenCallback, countMap);
-        const dependencyCount1 = dependencyCount(value1, iterChildrenCallback, countMap);
-        return dependencyCount0 - dependencyCount1;
-    });
-}
-
-function topologicalSort(map = new Map()) {
-    const sorted  = [];
-    const visited = [];
-    
-    for (const key of map.keys()) {
-        visit(key);
-    }
-
-    function visit(key) {
-        if (sorted.includes(key)) {
-            return;
-        }
-
-        if (visited.includes(key)) {
-            return;
-        }
-
-        visited.push(key);
-
-        for (const childKey of map.get(key)) {
-            visit(childKey);
-        }
-
-        sorted.push(key);
-    }
-
-    return sorted;
-}
-
 class Vector2 {
     static fromObject(v) { return new Vector2(v.x, v.y); }
     static fromArray(v)  { return new Vector2(v[0], v[1]); }
@@ -381,412 +297,7 @@ class NeuralNetwork {
     }
 }
 
-// class ForwardFeedNeuralNetwork {
-//     constructor (inputCount, outputCount, nodes) {
-//         this.inputCount = inputCount;
-//         this.outputCount = outputCount;
-//         this.nodes = nodes;
-//     }
-
-//     processInputs(... inputValues) {
-//     }
-// }
-
-// class NEAT_NeuralNetworkConnection {
-//     constructor (inovationNumber = 0, inputNodeIndex = 0, outputNodeIndex = 0, weight = 1, enabled = true) {
-//         this.inovationNumber = inovationNumber;
-//         this.inputNodeIndex  = inputNodeIndex;
-//         this.outputNodeIndex = outputNodeIndex;
-//         this.weight          = weight;
-//         this.enabled       = enabled;
-//     }
-    
-//     static createCrossover(dominant, recessive) {
-//         if (dominant.inovationNumber != recessive.inovationNumber) {
-//             return null;
-//         }
-
-//         const { inovationNumber, inputNodeIndex, outputNodeIndex } = dominant;
-//         const weight    = Math.random() < 0.5 ? dominant.weight : recessive.weight;
-//         const enabled = Math.random() < 0.5 ? dominant.enabled : recessive.enabled;
-//         return new NEAT_NeuralNetworkConnection(inovationNumber, inputNodeIndex, outputNodeIndex, weight, enabled);
-//     }
-
-//     clone() {
-//         return new NEAT_NeuralNetworkNode(
-//             inovationNumber,
-//             inputNodeIndex,
-//             outputNodeIndex,
-//             weight,
-//             enabled,
-//         );
-//     }
-// }
-
-// class NEAT_NeuralNetworkNode {
-//     static createCrossover(dominant, recessive) {
-//         if (dominant.index != recessive.index) {
-//             return null;
-//         }
-
-//         const activation = Math.random() < 0.5 ? dominant.activation : recessive.activation;
-//         return new NEAT_NeuralNetworkNode(dominant.index, activation);
-//     }
-
-//     constructor (index, activation, value = 0) {
-//         this.index = index;
-//         this.activation = activation;
-//         this.value = value;
-//     }
-
-//     clone() {
-//         return new NEAT_NeuralNetworkNode(this.index, this.activation, this.value);
-//     }
-// }
-
-// class NEAT_NeuralNetwork {
-//     static fromInputOutput(inputCount, outputCount) {
-//         // const result = new NEAT_NeuralNetwork(nodes);
-//     }
-
-//     constructor (nodes, connections, inputCount, outputCount) {
-//         this.nodes        = nodes;
-//         this.connections  = connections;
-//         this.inputCount   = inputCount;
-//         this.outputCount  = outputCount;
-//     }
-
-//     clone() {
-//         return new NEAT_NeuralNetwork(
-//             this.nodes.map(e => e.clone()),
-//             this.connections.map(e => e.clone()),
-//             this.inputCount,
-//             this.outputCount,
-//         );
-//     }
-
-//     outputNodeAt(idx) {
-//         if (idx >= this.outputCount || idx < 0) {
-//             return null;
-//         }
-
-//         return this.nodes[this.inputCount + idx];
-//     }
-
-//     inputNodeAt(idx) {
-//         if (idx >= this.inputCount || idx < 0) {
-//             return null;
-//         }
-
-//         return this.nodes[idx];
-//     }
-
-//     processInputs(inputValues) {
-//         if (inputValues.length != this.inputCount) {
-//             return false;
-//         }
-
-//         for (let idx = 0; idx < this.inputCount; ++idx) {
-//             this.nodes[idx].value = inputValues[idx];
-//         }
-
-//         const nodes = new Map(this.nodes.map(node => [ node.index, node ]));
-//         const outputNodeConnections = this.connections.reduce((connectionMap, connection) => {
-//             const nodeInputConnections = connectionMap.get(connection.outputNodeIndex) || [];
-//             connectionMap.set(connection.outputNodeIndex, [ ... nodeInputConnections, connection ]);
-//             return connectionMap;
-//         }, new Map());
-
-//         for (const [ outputNodeIndex, connections ] of outputNodeConnections) {
-//             const outputNode = nodes.get(outputNodeIndex);
-            
-//             outputNode.value = 0;
-//             for (let idx = 0; idx < connections.length; ++idx) {
-//                 const inputNode = nodes.get(connections[idx].inputNodeIndex);
-//                 outputNode.value += inputNode.value * connections[idx].weight;
-//             }
-
-//             outputNode.value = outputNode.activation(outputNode.value);
-//         }
-
-//         return true;
-
-//         // for (let idx = 0; idx < nodeConnections.length; ++idx) {
-//         // }
-
-//         // this.connections.sort((a, b) => a.outputNodeIndex - b.outputNodeIndex);
-
-//         // for (let idx = 0; idx < this.connections.length; ++idx) {
-//         // }
-
-
-//         // this.connections.sort((a, b) => a.outputNodeIndex - b.outputNodeIndex);
-
-//         // this.nodeIndexMap.clear();
-//         // for (let idx = 0; idx < this.nodes.length; ++idx) {
-//         //     this.nodeIndexMap.set(this.nodes[idx].index, idx);
-//         // }
-
-//         // let prevConnection = null;
-//         // for (let idx = 0; idx < this.connections.length; ++idx) {
-//         //     const inputNode = this.nodes[this.nodeIndexMap.get(this.connections.inputNodeIndex)];
-//         //     const outputNode = this.nodes[this.nodeIndexMap.get(this.connections.outputNodeIndex)];
-//         //     const connection = this.connections[idx];
-
-//         //     outputNode.value += inputNode.value * connection.weight;
-
-//         //     // if (prevConnection.inputNodeIndex < connection.inputNodeIndex && prevConnection.inputNodeIndex >= this.inputCount) {
-//         //     if (prevConnection.outputNodeIndex < connection.outputNodeIndex) {
-//         //         const activationNodeIndex = this.nodeIndexMap.get(prevConnection.outputNodeIndex);
-//         //         if (activationNodeIndex >= this.inputCount) {
-//         //             const nodeToActivate = this.nodes[prevConnection.inputNodeIndex];
-//         //             nodeToActivate.value = nodeToActivate.activation(nodeToActivate.value);
-//         //         }
-//         //     }
-
-//         //     prevConnection = connection;
-//         // }
-
-//         return true;
-//     }
-
-//     addConnection(connection) {
-//         this.connections.push(connection);
-//     }
-
-//     addNode(node) {
-//         this.nodes.push(node);
-//     }
-// }
-
-// class NEAT_NeuralNetworkSystem {
-//     constructor () {
-//         this.neuralNetworkIndex = 0;
-//         this.inovationNumber = 0;
-//         this.connectionSet = [];
-//         // this.connectionSet = new Set([]);
-//     }
-
-//     createNeuralNetwork(inputCount, outputCount) {
-//         const nodes = Array.from({ length: inputCount + outputCount }, () => new NEAT_NeuralNetworkNode);
-//         return new NEAT_NeuralNetwork(nodes, [], inputCount, outputCount);
-//     }
-
-//     // createConnection(inputIndex, outputIndex, weight, enabled) {
-//     //     const connection = this.connectionSet.find(([idxInput, idxOutput]) => idxInput == inputIndex && idxOutput == outputIndex);
-//     //     const inovationNumber = (connection == null || connection == undefined) ? this.inovationNumber++ : connection.inovationNumber;
-//     //     return new NEAT_NeuralNetworkConnection(inovationNumber, inputIndex, outputIndex, weight, enabled);
-//     // }
-
-//     createMutation(neuralNetwork) {
-//         for (let idx = 0; idx < neuralNetwork.connections.length; ++idx) {
-//             neuralNetwork.connections[idx].weight += 0.5 * Math.random();
-//         }
-//     }
-
-//     createCrossover(dominant, recessive) {
-//         const offspring = this.createNeuralNetwork();
-//         // const offspring = new NEAT_NeuralNetwork();
-
-//         for (let idx = 0; idx < dominant.nodes.length; ++idx) {
-//             const dominantNode = dominant.nodes[idx];
-//             const recessiveNode = recessive.nodes.find(node => node.index == dominantNode.index);
-
-//             if (recessiveNode == null || recessiveNode == undefined) {
-//                 offspring.addNode(dominantNode);
-//             }
-//             else {
-//                 offspring.addNode(NEAT_NeuralNetworkNode.createCrossover(dominantNode, recessiveNode));
-//             }
-//         }
-
-//         for (let idx = 0; idx < dominant.connections.length; ++idx) {
-//             const dominantConnection = dominant.connections[idx];
-//             const recessiveConnection = recessive.connections.find(connection => connection.inovationNumber == dominantConnection.inovationNumber);
-
-//             if (recessiveConnection == null || recessiveConnection == undefined) {
-//                 offspring.addConnection(dominantConnection);
-//             }
-//             else {
-//                 offspring.addConnection(NEAT_NeuralNetworkConnection.createCrossover(dominantConnection, recessiveConnection));
-//             }
-//         }
-
-//         return offspring;
-//     }
-// }
-
-class NEAT_NeuralNetworkNode {
-    static createCrossover(dominant, recessive) {
-        if (dominant.index != recessive.index) {
-            return null;
-        }
-
-        const activation = Math.random() < 0.5 ? dominant.activation : recessive.activation;
-        return new NEAT_NeuralNetworkNode(dominant.index, activation);
-    }
-
-    constructor (index = 0, activation = sigmod, value = 0) {
-        this.activation = activation;
-        this.index = index;
-        this.value = value;
-    }
-
-    clone() {
-        return new NEAT_NeuralNetworkNode(this.index, this.activation, this.value);
-    }
-    
-}
-
-class NEAT_NeuralNetworkConnection {
-    static createCrossover(dominant, recessive) {
-        if (dominant.inputIndex != recessive.inputIndex || dominant.outputIndex != recessive.outputIndex) {
-            return null;
-        }
-
-        const { inputNodeIndex, outputNodeIndex } = dominant;
-        const weight    = Math.random() < 0.5 ? dominant.weight : recessive.weight;
-        const enabled = Math.random() < 0.5 ? dominant.enabled : recessive.enabled;
-        return new NEAT_NeuralNetworkConnection(inputNodeIndex, outputNodeIndex, weight, enabled);
-    }
-
-    constructor (inputIndex = 0, outputIndex = 0, weight = 1, enabled = true) {
-        this.inputIndex = inputIndex;
-        this.outputIndex = outputIndex;
-        this.weight = weight;
-        this.enabled = enabled;
-    }
-
-    clone() {
-        return new NEAT_NeuralNetworkConnection(
-            this.inputIndex,
-            this.outputIndex,
-            this.weight,
-            this.enabled,
-        );
-    }
-}
-
-class NEAT_NeuralNetwork {
-    static createBase(inputCount, outputCount, activation = sigmod) {
-        const nodes       = Array.from({ length: inputCount + outputCount }, (_, idx) => new NEAT_NeuralNetworkNode(idx, activation));
-        const connections = [];
-
-        for (let idx0 = 0; idx0 < inputCount; ++idx0) {
-            for (let idx1 = 0; idx1 < outputCount; ++idx1) {
-                connections.push(new NEAT_NeuralNetworkConnection(idx0, inputCount + idx1, 1, true));
-            }
-        }
-
-        return new NEAT_NeuralNetwork(inputCount, outputCount, nodes, connections);
-    }
-
-    static createCrossover(dominant, recessive) {
-        const offspring = new NEAT_NeuralNetwork(dominant.inputCount, dominant.outputCount, [], []);
-
-        for (let idx = 0; idx < dominant.nodes.length; ++idx) {
-            const dominantNode = dominant.nodes[idx];
-            const recessiveNode = recessive.nodes.find(node => node.index == dominantNode.index);
-
-            if (recessiveNode == null || recessiveNode == undefined) {
-                offspring.nodes.push(dominantNode);
-            }
-            else {
-                offspring.nodes.push(NEAT_NeuralNetworkNode.createCrossover(dominantNode, recessiveNode));
-            }
-        }
-
-        for (let idx = 0; idx < dominant.connections.length; ++idx) {
-            const dominantConnection = dominant.connections[idx];
-            const recessiveConnection = recessive.connections.find(connection => connection.inputIndex  == dominantConnection.inputIndex
-            &&                                                                   connection.outputIndex == dominantConnection.outputIndex);
-
-            if (recessiveConnection == null || recessiveConnection == undefined) {
-                offspring.connections.push(dominantConnection);
-            }
-            else {
-                offspring.connections.push(NEAT_NeuralNetworkConnection.createCrossover(dominantConnection, recessiveConnection));
-            }
-        }
-
-        return offspring;
-    }
-
-    constructor (inputCount, outputCount, nodes = [], connections = []) {
-        this.inputCount = inputCount;
-        this.outputCount = outputCount;
-        this.connections = connections;
-        this.nodes = nodes;
-    }
-    
-    inputNodeAt(idx) {
-        if (idx >= this.inputCount || idx < 0) {
-            return null;
-        }
-
-        return this.nodes[idx];
-    }
-
-    outputNodeAt(idx) {
-        if (idx >= this.outputCount || idx < 0) {
-            return null;
-        }
-
-        return this.nodes[this.inputCount + idx];
-    }
-
-    clone() {
-        return new NEAT_NeuralNetwork(
-            this.inputCount,
-            this.outputCount,
-            this.nodes.map(e => e.clone()),
-            this.connections.map(e => e.clone()),
-        );
-    }
-
-    randomize(randomCallback = () => 2 * (Math.random() - 0.5)) {
-        for (let idx = 0; idx < this.connections.length; ++idx) {
-            this.connections[idx].weight = randomCallback(this.connections[idx].weight);
-        }
-
-        return this;
-    }
-
-    processInputs(... inputValues) {
-        if (inputValues.length != this.inputCount) {
-            return false;
-        }
-
-        for (let idx = 0; idx < this.inputCount; ++idx) {
-            this.nodes[idx].value = inputValues[idx];
-        }
-
-        const nodes = new Map(this.nodes.map(node => [ node.index, node ]));
-        const outputNodeConnections = this.connections.reduce((connectionMap, connection) => {
-            const nodeInputConnections = connectionMap.get(connection.outputIndex) || [];
-            connectionMap.set(connection.outputIndex, [ ... nodeInputConnections, connection ]);
-            return connectionMap;
-        }, new Map());
-
-        for (const [ outputIndex, connections ] of outputNodeConnections) {
-            const outputNode = nodes.get(outputIndex);
-
-            outputNode.value = 0;
-            for (let idx = 0; idx < connections.length; ++idx) {
-                const inputNode = nodes.get(connections[idx].inputIndex);
-                outputNode.value += inputNode.value * connections[idx].weight;
-            }
-
-            outputNode.value = outputNode.activation(outputNode.value);
-        }
-
-        return true;
-    }
-}
-
 class ConnectionGene {
-    static _innovationCounter = 0;
-
     static crossover(dominant, recessive) {
         if (dominant.innovationNumber != recessive.innovationNumber) {
             return null;
@@ -801,10 +312,6 @@ class ConnectionGene {
                                   weight, enabled);
     }
 
-    static create(inputNeuronId = 0, outputNeuronId = 0, weight = 1, enabled = true) {
-        return new ConnectionGene(ConnectionGene._innovationCounter++, inputNeuronId, outputNeuronId, weight, enabled);
-    }
-
     constructor (innovationNumber = 0, inputNeuronId = 0, outputNeuronId = 0, weight = 1, enabled = true) {
         this.innovationNumber = innovationNumber;
         this.inputNeuronId = inputNeuronId;
@@ -815,8 +322,6 @@ class ConnectionGene {
 }
 
 class NeuronGene {
-    static _neuronCounter = 0;
-
     static crossover(dominant, recessive) {
         if (dominant.neuronId != recessive.neuronId) {
             return null;
@@ -867,10 +372,10 @@ class NeuralNetworkGenome {
             const recessiveNeuron = recessive.neurons.find(neuron => neuron.neuronId == dominantNeuron.neuronId);
 
             if (recessiveNeuron == null || recessiveNeuron == undefined) {
-                offspring.neurons.push(dominantNeuron);
+                offspring.addNeuron(dominantNeuron);
             }
             else {
-                offspring.neurons.push(NeuronGene.crossover(dominantNeuron, recessiveNeuron));
+                offspring.addNeuron(NeuronGene.crossover(dominantNeuron, recessiveNeuron));
             }
         }
 
@@ -879,10 +384,10 @@ class NeuralNetworkGenome {
             const recessiveConnection = recessive.connections.find(connection => connection.innovationNumber == dominantConnection.innovationNumber);
 
             if (recessiveConnection == null || recessiveConnection == undefined) {
-                offspring.connections.push(dominantConnection);
+                offspring.addConnection(dominantConnection);
             }
             else {
-                offspring.connections.push(ConnectionGene.crossover(dominantConnection, recessiveConnection));
+                offspring.addConnection(ConnectionGene.crossover(dominantConnection, recessiveConnection));
             }
         }
 
@@ -895,70 +400,131 @@ class NeuralNetworkGenome {
     }
 
     static createBase(inputCount = 0, outputCount = 0) {
-        const neurons = [];
-        const connections = [];
-        let inovationNumber = 0;
-        let neuronId = 0;
+        // const neurons = [];
+        // const connections = [];
+        // let inovationNumber = 0;
+        // let neuronId = 0;
 
-        for (let idx0 = 0; idx0 < inputCount; ++idx0) {
-            neurons.push(new NeuronGene(neuronId++));
-        }
+        // for (let idx0 = 0; idx0 < inputCount; ++idx0) {
+        //     addNeuronF(new NeuronGene(neuronId++));
+        // }
         
-        for (let idx1 = 0; idx1 < outputCount; ++idx1) {
-            neurons.push(new NeuronGene(neuronId++));
-        }
+        // for (let idx1 = 0; idx1 < outputCount; ++idx1) {
+        //     neurons.push(new NeuronGene(neuronId++));
+        // }
 
-        for (let idx0 = 0; idx0 < inputCount; ++idx0) {
-            for (let idx1 = 0; idx1 < outputCount; ++idx1) {
-                connections.push(new ConnectionGene(inovationNumber++, idx0, inputCount + idx1));
+        // for (let idx0 = 0; idx0 < inputCount; ++idx0) {
+        //     for (let idx1 = 0; idx1 < outputCount; ++idx1) {
+        //         connections.push(new ConnectionGene(inovationNumber++, idx0, inputCount + idx1));
+        //     }
+        // }
+
+        // return new NeuralNetworkGenome(this._genomeCounter++, inputCount, outputCount, neurons, connections);
+    }
+
+    constructor (genomeId = 0, inputCount = 0, outputCount = 0) {
+        this.genomeId               = genomeId;
+        this.inputCount             = inputCount;
+        this.outputCount            = outputCount;
+        this.connections            = [];
+        this.neurons                = [];
+        this.connectionGraph        = new Map();
+        this.neuronIdToGene         = new Map();
+        this.neuronDependencyCounts = new Map();
+    }
+
+    addConnection(connection) {
+        const outputNeuronConnections = this.connectionGraph.get(connection.outputNeuronId) || [];
+        outputNeuronConnections.push(connection);
+        this.connectionGraph.set(connection.outputNeuronId, outputNeuronConnections);
+        this.connections.push(connection);
+    }
+    
+    removeConnection(index) {
+        const neuronConnections = this.connectionGraph.get(connection.outputNeuronId);
+        if (neuronConnections !== null || neuronConnections !== undefined) {
+            const connection = this.connections[index];
+            const removalIndex = neuronConnections.findIndex(otherConnection => connection.innovationNumber == otherConnection.innovationNumber);
+
+            neuronConnections.splice(removalIndex, 1);
+            this.connections.splice(index, 1);
+            this.connectionGraph.set(connection.outputNeuronId, neuronConnections);
+            this.neuronDependencyCounts.set(connection.outputNeuronId, null);
+        }
+    }
+
+    addNeuron(neuron) {
+        this.neuronIdToGene.set(neuron.neuronId, neuron);
+        this.neurons.push(neuron);
+    }
+
+    removeNeuron(index) {
+        const neuron = this.neurons[index];
+
+        for (let idx = this.connections.length - 1; idx >= 0; --idx) {
+            if (this.connections[idx].inputNeuronId  == neuron.neuronId
+            ||  this.connections[idx].outputNeuronId == neuron.neuronId)
+            {
+                this.connections.splice(idx, 1);
             }
         }
 
-        return new NeuralNetworkGenome(this._genomeCounter++, inputCount, outputCount, neurons, connections);
+        this.neuronDependencyCounts.set(neuron.neuronId, null);
+        this.neuronIdToGene.set(neuron.neuronId, null);
+        this.connectionGraph.set(neuron.neuronId, null);
+        this.neurons.splice(index, 1);
     }
 
-    constructor (genomeId = 0, inputCount = 0, outputCount = 0, neurons = [], connections = []) {
-        this.genomeId = genomeId;
-        this.neurons = neurons;
-        this.connections = connections;
-        this.inputCount = inputCount;
-        this.outputCount = outputCount;
-    }
-
-    createConnectionGraph() {
-        const connectionGraph = new Map();
-
-        for (let idx = 0; idx < this.connections.length; ++idx) {
-            const connection = this.connections[idx];
-            const nodeConnections = connectionGraph.get(connection.outputNeuronId) || [];
-            nodeConnections.push(connection);
-            connectionGraph.set(connection.outputNeuronId, nodeConnections);
+    getNeuronDependencyCount(neuronGene) {
+        const storedDependencyCount = this.neuronDependencyCounts.get(neuronGene.neuronId);
+        if (storedDependencyCount !== null || storedDependencyCount !== undefined) {
+            return storedDependencyCount;
         }
 
-        return connectionGraph;
+        const connections = this.connectionGraph.get(neuronGene.neuronId);
+        if (connections !== null || connections !== undefined) {
+            return 0;
+        }
+
+        let count = 0;
+        for (let idx = 0; idx < connections.length; ++idx) {
+            const neuronGene = this.neuronIdToGene.get(connections[idx].inputNeuronId);
+            count += 1 + this.getNeuronDependencyCount(neuronGene);
+        }
+
+        this.neuronDependencyCounts.set(neuronGene.neuronId, count);
+        return count;
     }
 
     toNeuralNetwork() {
-        const neuronIdToGene = new Map(this.neurons.map(neuron => [ neuron.neuronId, neuron ]));
-        const connectionGraph = this.createConnectionGraph();
-        
-        const dependencyCounts = new Map();
         const sortedNeuronGenes = this.neurons.toSorted((neuron0, neuron1) => {
-            const dependencyCount0 = neuron0.dependencyCount(neuronIdToGene, connectionGraph, dependencyCounts);
-            const dependencyCount1 = neuron1.dependencyCount(neuronIdToGene, connectionGraph, dependencyCounts);
+            const dependencyCount0 = this.getNeuronDependencyCount(neuron0);
+            const dependencyCount1 = this.getNeuronDependencyCount(neuron1);
             return dependencyCount0 - dependencyCount1;
         });
 
         const sortedNeuronIdToIndex = new Map(sortedNeuronGenes.map((neuronGene, idx) => [ neuronGene.neuronId, idx ]));
-        const neurons = sortedNeuronGenes.map(neuronGene => new FeedForwardNeuralNetworkNeuron(neuronGene.activation));
+        const neurons = sortedNeuronGenes.map(neuronGene => new FeedForwardNeuron(neuronGene.activation, []));
 
-        for (let idx = 0; idx < neurons.length; ++idx) {
-            const inputConnections = connectionGraph.get(sortedNeuronGenes[idx].neuronId) || [];
+        for (let idx0 = 0; idx0 < neurons.length; ++idx0) {
+            const inputConnectionGenes = this.connectionGraph.get(sortedNeuronGenes[idx0].neuronId);
 
-            neurons[idx].inputs = inputConnections.map(connection => {
-                const inputNeuronIndex = sortedNeuronIdToIndex.get(connection.inputNeuronId);
-                return new FeedForwardNeuralNetworkConnection(neurons[inputNeuronIndex], connection.weight);
-            });
+            if (inputConnectionGenes == null) {
+                continue;
+            }
+
+            const neuron = neurons[idx0];
+            for (let idx1 = 0; idx1 < inputConnectionGenes.length; ++idx1) {
+                const inputConnectionGene = inputConnectionGenes[idx1];
+                
+                if (!inputConnectionGene.enabled) {
+                    continue;
+                }
+
+                const inputNeuronIndex = sortedNeuronIdToIndex.get(inputConnectionGene.inputNeuronId);
+                const connection = new FeedForwardConnection(neurons[inputNeuronIndex], inputConnectionGene.weight);
+                neuron.inputs.push(connection);
+            }
         }
 
         const inputNeurons = neurons.slice(0, this.inputCount);
@@ -968,27 +534,129 @@ class NeuralNetworkGenome {
         return new FeedForwardNeuralNetwork(inputNeurons, outputNeurons, neuronsToProcess);
     }
 
-    mutateAddConnection() {
+    findConnection(inputNeuronId, outputNeuronId) {
+        for (let idx = 0; idx < this.connections.length; ++idx) {
+            if (this.connections[idx].inputNeuronId  == inputNeuronId
+            &&  this.connections[idx].outputNeuronId == outputNeuronId) {
+                return this.connections[idx];
+            }
+        }
+
+        return null;
     }
 
-    mutateRemoveConnection() {
+    connectionMakesCycle(inputNeuronId, outputNeuronId) {
+        const reached = [];
+        const pending = [ outputNeuronId ];
+
+        while (pending.length != 0) {
+            const current = pending.pop();
+
+            if (current == inputNeuronId) {
+                return true;
+            }
+
+            if (reached.includes(current)) {
+                continue;
+            }
+
+            reached.push(current);
+
+            const connections = this.connectionGraph.get(current);
+            for (let idx = 0; idx < connections.length; ++idx) {
+                pending.push(connections[idx].inputNeuronId);
+            }
+        }
+
+        return false;
     }
 
-    mutateAddNeuron() {
+}
+
+class NeuralNetworkMutator {
+    constructor(innovationNumber = 0, neuronCounter = 0, genomeCounter = 0) {
+        this._innovationNumber = innovationNumber;
+        this._neuronCounter = neuronCounter;
+        this._genomeCounter = genomeCounter;
     }
 
-    mutateRemoveNeuron() {
+    createConnection(inputNeuronId = 0, outputNeuronId = 0, weight = 1, enabled = true) {
+        return new ConnectionGene(this._innovationNumber++, inputNeuronId, outputNeuronId, weight, enabled);
+    }
+
+    createNeuron(activation = sigmod) {
+        return new NeuronGene(this._neuronCounter++, activation, value);
+    }
+    
+    mutateAddConnection(genome) {
+        const inputNeuron  = genome.neurons[Math.floor(genome.neurons.length * Math.random())];
+        const outputNeuron = genome.neurons[Math.floor(genome.neurons.length * Math.random())];
+
+        const existingConnection = genome.findConnection(inputNeuron.neuronId, outputNeuron.neuronId);
+
+        if (existingConnection !== null || existingConnection !== undefined) {
+            return;
+        }
+
+        if (genome.connectionMakesCycle(inputNeuron.neuronId, outputNeuron.neuronId)) {
+            return;
+        }
+
+        const newConnection = this.createConnection(inputNeuron.neuronId, outputNeuron.neuronId, 2 * Math.random() - 1);
+        genome.addConnection(newConnection);
+    }
+
+    mutateRemoveConnection(genome) {
+        if (genome.connections.length == 0) {
+            return;
+        }
+
+        const removalIndex = Math.floor(genome.connections.length * Math.random());
+        genome.removeConnection(removalIndex);
+    }
+
+    mutateAddNeuron(genome) {
+        if (genome.connections.length == 0) {
+            return;
+        }
+
+        const connectionToSplit = genome.connections[Math.floor(genome.connections.length * Math.random())];
+        connectionToSplit.enabled = false;
+
+        const newNeuron = this.createNeuron();
+        genome.addNeuron(newNeuron);
+        
+        genome.addConnection(this.createConnection(connectionToSplit.inputNeuronId, newNeuron.neuronId,               1));
+        genome.addConnection(this.createConnection(newNeuron.neuronId,              connectionToSplit.outputNeuronId, connectionToSplit.weight));
+    }
+
+    mutateRemoveNeuron(genome) {
+        if (genome.neurons.length - genome.inputCount - genome.outputCount <= 0) {
+            return;
+        }
+
+        const removalIndex = Math.floor(genome.neuron.length * Math.random());
+        genome.removeNeuron(removalIndex);
+    }
+
+    mutateChangeWeight(genome) {
+        if (genome.connections.length == 0) {
+            return;
+        }
+
+        const connectionToModify = genome.connections[Math.floor(genome.connections.length * Math.random())];
+        connectionToModify.weight += Math.random();
     }
 }
 
-class FeedForwardNeuralNetworkConnection {
+class FeedForwardConnection {
     constructor (neuron, weight) {
         this.neuron = neuron;
         this.weight = weight;
     }
 }
 
-class FeedForwardNeuralNetworkNeuron {
+class FeedForwardNeuron {
     constructor (activation, inputs) {
         this.activation = activation;
         this.inputs = inputs;
@@ -1315,62 +983,20 @@ class _Game {
         this.batchDuration = 10000;
         this.batchSize = 100;
         this.generationNumber = 0;
-        this.players = Array.from({ length: this.batchSize }, () => new NEAT_ComputerPlayer(new TargetObject(), NEAT_NeuralNetwork.createBase(4, 3)));
-        // this.players = Array.from({ length: this.batchSize }, () => new NEAT_ComputerPlayer(new TargetObject(), this.system.createNeuralNetwork(3, 3)));
-
-        // this.startGeneration(NEAT_NeuralNetwork.createBase(4, 3), true);
-        this.startGeneration(false);
     }
 
-    startGeneration(applyNeat = true) {
-        ++this.generationNumber;
-        this.batchStartTime = Date.now();
-
-        if (applyNeat) {
-            this.players.sort((a, b) => a.fitness - b.fitness);
-            const cutoffCount = Math.floor(0.25 * this.batchSize);
-            this.players = this.players.slice(0, cutoffCount);
-
-            while (this.players.length < this.batchSize) {
-                const player0 = this.players[Math.floor(cutoffCount * Math.random())];
-                const player1 = this.players[Math.floor(cutoffCount * Math.random())];
-                const dominant  = player0.fitness > player1.fitness ? player0.neuralNetwork : player1.neuralNetwork;
-                const recessive = player1.fitness > player0.fitness ? player1.neuralNetwork : player0.neuralNetwork;
-                const neuralNetwork = NEAT_NeuralNetwork.createCrossover(dominant, recessive);
-                this.players.push(new NEAT_ComputerPlayer(new TargetObject(), neuralNetwork));
-            }
-        }
-
-        for (let idx = 0; idx < this.players.length; ++idx) {
-            this.players[idx].reset(this);
-            // this.players[idx].neuralNetwork = neuralNetwork.clone();
-
-            // if (idx != 0) {
-            //     if (randomizeAll || Math.random() <= MUTATION_RATE) {
-            //         this.players[idx].neuralNetwork.randomize(this.mutationRandomize);
-            //     }
-            //     else {
-            //         this.players[idx].neuralNetwork.randomize(this.regularRandomize);
-            //     }
-            // }
-        }
+    startGeneration() {
     }
 
     update() {
-        // this.bestPlayer = this.players.reduce((bestPlayer, player) => {
-        //     const bestPlayerFitness = bestPlayer.calculateFitness(canvas);
-        //     const playerFitness = player.calculateFitness(canvas);
-        //     return bestPlayerFitness > playerFitness ? bestPlayer : player;
-        // });
+        // this.players.sort((a, b) => a.fitness - b.fitness);
 
-        this.players.sort((a, b) => a.fitness - b.fitness);
-
-        for (let idx = 0; idx < this.players.length; ++idx) {
-            this.players[idx].update(this);
-        }
+        // for (let idx = 0; idx < this.players.length; ++idx) {
+        //     this.players[idx].update(this);
+        // }
 
         if (Date.now() - this.batchStartTime > this.batchDuration) {
-            this.startGeneration(true);
+            this.startGeneration();
         }
 
         this.render();
@@ -1380,12 +1006,10 @@ class _Game {
         this.context.fillStyle = "#90D5FF";
         this.context.fillRect(0, 0, this.context.canvas.width, this.context.canvas.height);
 
-        for (let idx = 0; idx < this.players.length; ++idx) {
-            const gradient = idx / this.players.length;
-            this.players[idx].render(this.context, `hsl(288, 100%, ${Math.floor(gradient * 50)}%)`);
-        }
-
-        // this.players[0].neuralNetwork.render(this.context);
+        // for (let idx = 0; idx < this.players.length; ++idx) {
+        //     const gradient = idx / this.players.length;
+        //     this.players[idx].render(this.context, `hsl(288, 100%, ${Math.floor(gradient * 50)}%)`);
+        // }
 
         const messageString = `GenerationNumber: ${this.generationNumber} | time: ${Date.now() - this.batchStartTime}`;
 
@@ -1533,4 +1157,4 @@ async function main() {
     game.setupGameLoop();
 }
 
-// window.addEventListener("load", main, false);
+window.addEventListener("load", main, false);

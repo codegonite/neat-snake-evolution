@@ -90,6 +90,19 @@ const BATCH_DURATION = 30000;
 
 let displayLines = false;
 
+// const cloneMapPair = pair => (pair[1] = pair[1].clone(), pair);
+// const cloneMap = (map) => new Map([ ... map.entries() ].map(cloneMapPair));
+
+function cloneMap(map) {
+    const clone = new Map();
+    
+    for (const [key, value] of map) {
+        clone.set(key, value.clone());
+    }
+
+    return clone;
+}
+
 function groupBy(iterable, getGroupKey) {
     const groupMap = new Map();
 
@@ -347,354 +360,15 @@ class NeuralNetwork {
     }
 }
 
-class ConnectionGene {
-    static crossover(dominant, recessive) {
-        if (dominant.innovationNumber != recessive.innovationNumber) {
-            return null;
-        }
-
-        const weight = Math.random() < 0.5 ? dominant.weight : recessive.weight;
-        const enabled = Math.random() < 0.5 ? dominant.enabled : recessive.enabled;
-        
-        return new ConnectionGene(dominant.innovationNumber,
-                                  dominant.inputIdx,
-                                  dominant.outputIdx,
-                                  weight, enabled);
-    }
-
-    constructor (innovationNumber = 0, inputNeuronId = 0, outputNeuronId = 0, weight = 1, enabled = true) {
-        this.innovationNumber = innovationNumber;
-        this.inputNeuronId = inputNeuronId;
-        this.outputNeuronId = outputNeuronId;
-        this.weight = weight;
-        this.enabled = enabled;
-    }
-}
-
-class NeuronGene {
-    static crossover(dominant, recessive) {
-        if (dominant.neuronId != recessive.neuronId) {
-            return null;
-        }
-
-        const activation = Math.random() < 0.5 ? dominant.activation : recessive.activation;
-        return new NeuronGene(dominant.neuronId, activation);
-    }
-
-    constructor (neuronId = 0, activation = sigmod, value = 0) {
+class _NeuronGene {
+    constructor(neuronId = 0, activation = sigmod, value = 0) {
         this.neuronId = neuronId;
         this.activation = activation;
         this.value = value;
     }
 
-    dependencyCount(neuronIdToGene, connectionGraph, countMap = new Map()) {
-        const storedDependencyCount = countMap.get(this.neuronId);
-
-        if (storedDependencyCount !== null || storedDependencyCount !== undefined) {
-            return storedDependencyCount;
-        }
-
-        let count = 0;
-        const connections = connectionGraph.get(this.neuronId);
-
-        if (connections !== null || connections !== undefined) {
-            for (let idx = 0; idx < connections.length; ++idx) {
-                const neuronGene = neuronIdToGene.get(connections[idx].inputNeuronId);
-                count += 1 + neuronGene.dependencyCount(neuronIdToGene, connectionGraph, countMap);
-            }
-        }
-
-        countMap.set(this.neuronId, count);
-        return count;
-    }
-}
-
-class NeuralNetworkGenome {
-    static _genomeCounter = 0;
-
-    static crossover(dominant, recessive) {
-        // genomeId should be equal to dominant.genomeId since ids should be maintained during crossovers.
-        const genomeId = NeuralNetworkGenome._genomeCounter++;
-        const offspring = new NeuralNetworkGenome(genomeId, dominant.inputCount, dominant.outputCount);
-
-        for (let idx = 0; idx < dominant.neurons.length; ++idx) {
-            const dominantNeuron = dominant.neurons[idx];
-            const recessiveNeuron = recessive.neurons.find(neuron => neuron.neuronId == dominantNeuron.neuronId);
-
-            if (recessiveNeuron == null || recessiveNeuron == undefined) {
-                offspring.addNeuron(dominantNeuron);
-            }
-            else {
-                offspring.addNeuron(NeuronGene.crossover(dominantNeuron, recessiveNeuron));
-            }
-        }
-
-        for (let idx = 0; idx < dominant.connections.length; ++idx) {
-            const dominantConnection = dominant.connections[idx];
-            const recessiveConnection = recessive.connections.find(connection => connection.innovationNumber == dominantConnection.innovationNumber);
-
-            if (recessiveConnection == null || recessiveConnection == undefined) {
-                offspring.addConnection(dominantConnection);
-            }
-            else {
-                offspring.addConnection(ConnectionGene.crossover(dominantConnection, recessiveConnection));
-            }
-        }
-
-        return offspring;
-    }
-
-    static mutation(genome) {
-        const genomeId  = NeuralNetworkGenome._genomeCounter++;
-        return new NeuralNetworkGenome(genomeId);
-    }
-
-    static createBase(inputCount = 0, outputCount = 0) {
-        // const neurons = [];
-        // const connections = [];
-        // let inovationNumber = 0;
-        // let neuronId = 0;
-
-        // for (let idx0 = 0; idx0 < inputCount; ++idx0) {
-        //     addNeuronF(new NeuronGene(neuronId++));
-        // }
-        
-        // for (let idx1 = 0; idx1 < outputCount; ++idx1) {
-        //     neurons.push(new NeuronGene(neuronId++));
-        // }
-
-        // for (let idx0 = 0; idx0 < inputCount; ++idx0) {
-        //     for (let idx1 = 0; idx1 < outputCount; ++idx1) {
-        //         connections.push(new ConnectionGene(inovationNumber++, idx0, inputCount + idx1));
-        //     }
-        // }
-
-        // return new NeuralNetworkGenome(this._genomeCounter++, inputCount, outputCount, neurons, connections);
-    }
-
-    constructor (genomeId = 0, inputCount = 0, outputCount = 0) {
-        this.genomeId               = genomeId;
-        this.inputCount             = inputCount;
-        this.outputCount            = outputCount;
-        this.connections            = [];
-        this.neurons                = [];
-        this.connectionGraph        = new Map();
-        this.neuronIdToGene         = new Map();
-        this.neuronDependencyCounts = new Map();
-    }
-
-    addConnection(connection) {
-        const outputNeuronConnections = this.connectionGraph.get(connection.outputNeuronId) || [];
-        outputNeuronConnections.push(connection);
-        this.connectionGraph.set(connection.outputNeuronId, outputNeuronConnections);
-        this.connections.push(connection);
-    }
-    
-    removeConnection(index) {
-        const neuronConnections = this.connectionGraph.get(connection.outputNeuronId);
-        if (neuronConnections !== null || neuronConnections !== undefined) {
-            const connection = this.connections[index];
-            const removalIndex = neuronConnections.findIndex(otherConnection => connection.innovationNumber == otherConnection.innovationNumber);
-
-            neuronConnections.splice(removalIndex, 1);
-            this.connections.splice(index, 1);
-            this.connectionGraph.set(connection.outputNeuronId, neuronConnections);
-            this.neuronDependencyCounts.set(connection.outputNeuronId, null);
-        }
-    }
-
-    addNeuron(neuron) {
-        this.neuronIdToGene.set(neuron.neuronId, neuron);
-        this.neurons.push(neuron);
-    }
-
-    removeNeuron(index) {
-        const neuron = this.neurons[index];
-
-        for (let idx = this.connections.length - 1; idx >= 0; --idx) {
-            if (this.connections[idx].inputNeuronId  == neuron.neuronId
-            ||  this.connections[idx].outputNeuronId == neuron.neuronId)
-            {
-                this.connections.splice(idx, 1);
-            }
-        }
-
-        this.neuronDependencyCounts.set(neuron.neuronId, null);
-        this.neuronIdToGene.set(neuron.neuronId, null);
-        this.connectionGraph.set(neuron.neuronId, null);
-        this.neurons.splice(index, 1);
-    }
-
-    getNeuronDependencyCount(neuronGene) {
-        const storedDependencyCount = this.neuronDependencyCounts.get(neuronGene.neuronId);
-        if (storedDependencyCount !== null || storedDependencyCount !== undefined) {
-            return storedDependencyCount;
-        }
-
-        const connections = this.connectionGraph.get(neuronGene.neuronId);
-        if (connections !== null || connections !== undefined) {
-            return 0;
-        }
-
-        let count = 0;
-        for (let idx = 0; idx < connections.length; ++idx) {
-            const neuronGene = this.neuronIdToGene.get(connections[idx].inputNeuronId);
-            count += 1 + this.getNeuronDependencyCount(neuronGene);
-        }
-
-        this.neuronDependencyCounts.set(neuronGene.neuronId, count);
-        return count;
-    }
-
-    toNeuralNetwork() {
-        const sortedNeuronGenes = this.neurons.toSorted((neuron0, neuron1) => {
-            const dependencyCount0 = this.getNeuronDependencyCount(neuron0);
-            const dependencyCount1 = this.getNeuronDependencyCount(neuron1);
-            return dependencyCount0 - dependencyCount1;
-        });
-
-        const sortedNeuronIdToIndex = new Map(sortedNeuronGenes.map((neuronGene, idx) => [ neuronGene.neuronId, idx ]));
-        const neurons = sortedNeuronGenes.map(neuronGene => new FeedForwardNeuron(neuronGene.activation, []));
-
-        for (let idx0 = 0; idx0 < neurons.length; ++idx0) {
-            const inputConnectionGenes = this.connectionGraph.get(sortedNeuronGenes[idx0].neuronId);
-
-            if (inputConnectionGenes == null) {
-                continue;
-            }
-
-            const neuron = neurons[idx0];
-            for (let idx1 = 0; idx1 < inputConnectionGenes.length; ++idx1) {
-                const inputConnectionGene = inputConnectionGenes[idx1];
-                
-                if (!inputConnectionGene.enabled) {
-                    continue;
-                }
-
-                const inputNeuronIndex = sortedNeuronIdToIndex.get(inputConnectionGene.inputNeuronId);
-                const connection = new FeedForwardConnection(neurons[inputNeuronIndex], inputConnectionGene.weight);
-                neuron.inputs.push(connection);
-            }
-        }
-
-        const inputNeurons = neurons.slice(0, this.inputCount);
-        const outputNeurons = neurons.slice(neurons.length - this.outputCount);
-        const neuronsToProcess = neurons.slice(this.inputCount);
-
-        return new FeedForwardNeuralNetwork(inputNeurons, outputNeurons, neuronsToProcess);
-    }
-
-    findConnection(inputNeuronId, outputNeuronId) {
-        for (let idx = 0; idx < this.connections.length; ++idx) {
-            if (this.connections[idx].inputNeuronId  == inputNeuronId
-            &&  this.connections[idx].outputNeuronId == outputNeuronId) {
-                return this.connections[idx];
-            }
-        }
-
-        return null;
-    }
-
-    connectionMakesCycle(inputNeuronId, outputNeuronId) {
-        const reached = [];
-        const pending = [ outputNeuronId ];
-
-        while (pending.length != 0) {
-            const current = pending.pop();
-
-            if (current == inputNeuronId) {
-                return true;
-            }
-
-            if (reached.includes(current)) {
-                continue;
-            }
-
-            reached.push(current);
-
-            const connections = this.connectionGraph.get(current);
-            for (let idx = 0; idx < connections.length; ++idx) {
-                pending.push(connections[idx].inputNeuronId);
-            }
-        }
-
-        return false;
-    }
-}
-
-class NeuralNetworkMutator {
-    constructor(innovationNumber = 0, neuronCounter = 0, genomeCounter = 0) {
-        this._innovationNumber = innovationNumber;
-        this._neuronCounter = neuronCounter;
-        this._genomeCounter = genomeCounter;
-    }
-
-    createConnection(inputNeuronId = 0, outputNeuronId = 0, weight = 1, enabled = true) {
-        return new ConnectionGene(this._innovationNumber++, inputNeuronId, outputNeuronId, weight, enabled);
-    }
-
-    createNeuron(activation = sigmod) {
-        return new NeuronGene(this._neuronCounter++, activation, value);
-    }
-    
-    mutateAddConnection(genome) {
-        const inputNeuron  = genome.neurons[Math.floor(genome.neurons.length * Math.random())];
-        const outputNeuron = genome.neurons[Math.floor(genome.neurons.length * Math.random())];
-
-        const existingConnection = genome.findConnection(inputNeuron.neuronId, outputNeuron.neuronId);
-
-        if (existingConnection !== null || existingConnection !== undefined) {
-            return;
-        }
-
-        if (genome.connectionMakesCycle(inputNeuron.neuronId, outputNeuron.neuronId)) {
-            return;
-        }
-
-        const newConnection = this.createConnection(inputNeuron.neuronId, outputNeuron.neuronId, 2 * Math.random() - 1);
-        genome.addConnection(newConnection);
-    }
-
-    mutateRemoveConnection(genome) {
-        if (genome.connections.length == 0) {
-            return;
-        }
-
-        const removalIndex = Math.floor(genome.connections.length * Math.random());
-        genome.removeConnection(removalIndex);
-    }
-
-    mutateAddNeuron(genome) {
-        if (genome.connections.length == 0) {
-            return;
-        }
-
-        const connectionToSplit = genome.connections[Math.floor(genome.connections.length * Math.random())];
-        connectionToSplit.enabled = false;
-
-        const newNeuron = this.createNeuron();
-        genome.addNeuron(newNeuron);
-        
-        genome.addConnection(this.createConnection(connectionToSplit.inputNeuronId, newNeuron.neuronId,               1));
-        genome.addConnection(this.createConnection(newNeuron.neuronId,              connectionToSplit.outputNeuronId, connectionToSplit.weight));
-    }
-
-    mutateRemoveNeuron(genome) {
-        if (genome.neurons.length - genome.inputCount - genome.outputCount <= 0) {
-            return;
-        }
-
-        const removalIndex = Math.floor(genome.neuron.length * Math.random());
-        genome.removeNeuron(removalIndex);
-    }
-
-    mutateChangeWeight(genome) {
-        if (genome.connections.length == 0) {
-            return;
-        }
-
-        const connectionToModify = genome.connections[Math.floor(genome.connections.length * Math.random())];
-        connectionToModify.weight += Math.random();
+    clone() {
+        return new _NeuronGene(this.neuronId, this.activation, this.value);
     }
 }
 
@@ -706,53 +380,225 @@ class _ConnectionGene {
         this.weight           = weight;
         this.enabled          = enabled;
     }
+
+    clone() {
+        return new _ConnectionGene(
+            this.innovationNumber,
+            this.inputNeuronId,
+            this.outputNeuronId,
+            this.weight,
+            this.enabled,
+        );
+    }
+}
+
+class InnovationCounter {
+    constructor (innovationCounter = 0, neuronCounter = 0, genomeCounter = 0) {
+        this.innovationCounter = innovationCounter;
+        this.neuronCounter = neuronCounter;
+        this.genomeCounter = genomeCounter;
+    }
+
+    createNeuronGene(activation) {
+        return new _NeuronGene(this.neuronCounter++, activation, 0);
+    }
+
+    createConnectionGene(inputNeuronId, outputNeuronId, weight, enabled = true) {
+        return new _ConnectionGene(this.innovationCounter++, inputNeuronId, outputNeuronId, weight, enabled);
+    }
+
+    createGenome(inputCount, outputCount) {
+        return new _Genome(this.genomeCounter++, inputCount, outputCount);
+    }
+
+    createBaseGenome(inputCount, outputCount) {
+        const result = this.createGenome(inputCount, outputCount);
+        
+        for (let idx = 0; idx < inputCount; ++idx) {
+            result.addNeuronGene(this.createNeuronGene(sigmod));
+        }
+        
+        for (let idx = 0; idx < outputCount; ++idx) {
+            result.addNeuronGene(this.createNeuronGene(sigmod));
+        }
+
+        for (let idx0 = 0; idx0 < inputCount; ++idx0) {
+            for (let idx1 = 0; idx1 < outputCount; ++idx1) {
+                result.addConnectionGene(this.createConnectionGene(idx0, inputCount + idx1, 1));
+            }
+        }
+
+        return result;
+    }
+}
+
+class _Species {
+    constructor () {
+        this.leaderGenome  = leaderGenome;
+        this.memberGenomes = memberGenomes;
+        this.totalSpeciesFitness = totalSpeciesFitness;
+    }
 }
 
 class _Genome {
-    constructor (genomeId = 0, inputCount = 0, outputCount = 0) {
+    static getCompatibilityDistance(genome0, genome1) {
+        return 0;
+    }
+
+    constructor (genomeId = 0, inputCount = 0, outputCount = 0, species = null, connections = new Map(), neurons = new Map()) {
         this.genomeId    = genomeId;
         this.inputCount  = inputCount;
         this.outputCount = outputCount;
-        this.connections = new Map();
-        this.neurons     = new Map();
+        this.connections = connections;
+        this.neurons     = neurons;
+        this.species     = species;
+        this.fitness     = 0;
+    }
+ 
+    clone() {
+        return new _Genome(
+            this.genomeId,
+            this.inputCount,
+            this.outputCount,
+            this.species,
+            cloneMap(this.connections),
+            cloneMap(this.neurons),
+        );
     }
 
-    addConnection(connection) {
-        this.connections.set(connection.innovationNumber, connection);
+    addConnectionGene(connectionGene) {
+        this.connections.set(connectionGene.innovationNumber, connectionGene);
     }
 
-    addNeuron(neuron) {
-        this.neurons.set(neuron.neuronId, neuron);
+    addNeuronGene(neuronGene) {
+        this.neurons.set(neuronGene.neuronId, neuronGene);
+    }
+
+    removeConnectionGene(connectionGene) {
+        this.connections.delete(connectionGene.innovationNumber);
+    }
+
+    removeNeuronGene(neuronGene) {
+        for (const connection of this.connections.values()) {
+            if (connection.outputNeuronId == neuronGene.neuronId
+            ||  connection.inputNeuronId  == neuronGene.neuronId)
+            {
+                this.removeConnectionGene(connection);
+            }
+        }
+
+        this.neurons.delete(neuronGene.neuronId);
     }
 
     toNeuralNetwork() {
-        const backwardsConnectionGraph = groupBy(this.connections, ({ outputNeuronId }) => outputNeuronId);
-        const sortedNeuronGenes = [ ... this.neurons.values() ].sort((neuron0, neuron1) => {
-            const dependencyCount0 = getNeuronDependencyCount(neuron0, backwardsConnectionGraph);
-            const dependencyCount1 = getNeuronDependencyCount(neuron1, backwardsConnectionGraph);
+        const backwardsConnectionGraph = groupBy(this.connections.values(), ({ outputNeuronId }) => outputNeuronId);
+        const neurons = new Map([ ... this.neurons.entries() ].sort((neuronIdPair0, neuronIdPair1) => {
+            const dependencyCount0 = getNeuronDependencyCount(neuronIdPair0[0], backwardsConnectionGraph);
+            const dependencyCount1 = getNeuronDependencyCount(neuronIdPair1[0], backwardsConnectionGraph);
             return dependencyCount0 - dependencyCount1;
-        });
+        }).map(([ neuronId, neuronGene ]) => {
+            return [ neuronId, new FeedForwardNeuron(neuronGene.activation, []) ];
+        }));
 
-        const sortedNeuronIdToIndex = new Map(sortedNeuronGenes.map((neuronGene, idx) => [ neuronGene.neuronId, idx ]));
-        const neurons = sortedNeuronGenes.map((neuronGene, idx, neurons) => {
-            const inputConnectionGenes = backwardsConnectionGraph.get(neuronGene.neuronId);
-            const neuron = new FeedForwardNeuron(neuronGene.activation, []);
+        for (const [ outputNeuronId, connections ] of backwardsConnectionGraph) {
+            const neuron = neurons.get(outputNeuronId);
+            neuron.inputs = connections.map(({ inputNeuronId, weight }) => new FeedForwardConnection(neurons.get(inputNeuronId), weight))
+        }
 
-            if (inputConnectionGenes == null) {
-                return neuron;
-            }
+        return new FeedForwardNeuralNetwork(this.inputCount, this.outputCount, [ ... neurons.values() ]);
+        
+        // const backwardsConnectionGraph = new Map();
+        // const neurons = new Map();
 
-            for (let idx = 0; idx < inputConnectionGenes.length; ++idx) {
-                const connectionGene = inputConnectionGenes[idx];
+        // for (let idx = 0; idx < this.connections.length; ++idx) {
+        //     const outputNeuron = this.neurons.get(this.connections[idx].outputNeuronId);
+        //     const inputNeuron = this.neurons.get(this.connections[idx].inputNeuronId);
 
-                if (connectionGene.enabled) {
-                    const inputNeuron = neurons[sortedNeuronIdToIndex.get(connectionGene.inputNeuronId)];
-                    neuron.inputs.push(new FeedForwardConnection(inputNeuron, connectionGene.weight));
-                }
-            }
+        //     let outputConnections = backwardsConnectionGraph.get(this.connections[idx].outputNeuronId) || [];
+        //     backwardsConnectionGraph.set(this.connections[idx].outputNeuronId, outputConnections);
+        //     outputConnections.push(this.connections[idx]);
 
-            return neuron;
-        });
+        //     // neurons.set(outputNeuron.neuronId, neurons.get(outputNeuron.neuronId) || new FeedForwardNeuron(outputNeuron.activation, []));
+        //     // neurons.set(inputNeuron.neuronId,  neurons.get(inputNeuron.neuronId)  || new FeedForwardNeuron(inputNeuron.activation, []));
+        // }
+
+        // .sort((neuronIdPair0, neuronIdPair1) => {
+        //     const dependencyCount0 = getNeuronDependencyCount(neuronIdPair0[0], backwardsConnectionGraph);
+        //     const dependencyCount1 = getNeuronDependencyCount(neuronIdPair1[0], backwardsConnectionGraph);
+        //     return dependencyCount0 - dependencyCount1;
+        // })
+
+        // const backwardsConnectionGraph = Object.create(null);
+        // const neurons = Object.create(null);
+        // for (let idx = 0; idx < this.connections.length; ++idx) {
+        //     const outputNeuron = this.neurons.get(this.connections[idx].outputNeuronId);
+        //     const inputNeuron = this.neurons.get(this.connections[idx].inputNeuronId);
+
+        //     backwardsConnectionGraph[this.connections[idx].outputNeuronId] ||= [];
+        //     backwardsConnectionGraph[this.connections[idx].outputNeuronId].push(this.connections[idx]);
+
+        //     neurons[this.connections[idx].outputNeuronId] ||= new FeedForwardNeuron(outputNeuron.activation, []);
+        //     neurons[this.connections[idx].inputNeuronId]  ||= new FeedForwardNeuron(inputNeuron.activation, []);
+        // }
+
+        // for (const [ neuronId, neuronGene ] of this.neurons) {
+        //     const connection = backwardsConnectionGraph.get(neuronId) || [];
+        // }
+        
+        // const neurons = [ ... this.neurons.entries() ].sort((neuronIdPair0, neuronIdPair1) => {
+        //     const dependencyCount0 = getNeuronDependencyCount(neuronIdPair0[0], backwardsConnectionGraph);
+        //     const dependencyCount1 = getNeuronDependencyCount(neuronIdPair1[0], backwardsConnectionGraph);
+        //     return dependencyCount0 - dependencyCount1;
+        // });
+        // .map(outputNeuronGene => {
+        //     const connections = backwardsConnectionGraph.get(outputNeuronGene.neuronId) || [];
+        //     const inputs = ;
+        //     return new FeedForwardNeuron(outputNeuronGene.activation, inputs);
+        // });
+
+        // const sortedNeuronGenes = [ ... this.neurons.values() ].sort((neuron0, neuron1) => {
+        //     const dependencyCount0 = getNeuronDependencyCount(neuron0, backwardsConnectionGraph);
+        //     const dependencyCount1 = getNeuronDependencyCount(neuron1, backwardsConnectionGraph);
+        //     return dependencyCount0 - dependencyCount1;
+        // });
+
+        // const sortedNeuronIdToIndex = new Map(sortedNeuronGenes.map((neuronGene, idx) => [ neuronGene.neuronId, idx ]));
+
+        // const neurons = [ ... this.neurons.values() ].sort((neuronGene0, neuronGene1) => {
+        //     const dependencyCount0 = getNeuronDependencyCount(neuronGene0.neuronId, backwardsConnectionGraph);
+        //     const dependencyCount1 = getNeuronDependencyCount(neuronGene1.neuronId, backwardsConnectionGraph);
+        //     return dependencyCount0 - dependencyCount1;
+        // });
+
+        // const neurons = [ ... backwardsConnectionGraph.entries() ].sort((entry0, entry1) => {
+        //     const dependencyCount0 = getNeuronDependencyCount(entry0[0], backwardsConnectionGraph);
+        //     const dependencyCount1 = getNeuronDependencyCount(entry1[0], backwardsConnectionGraph);
+        //     return dependencyCount0 - dependencyCount1;
+        // }).map(([ outputNeuronId, connections ]) => {
+        //     const outputNeuronGene = this.neurons.get(outputNeuronId);
+        //     inputs
+        //     return new FeedForwardNeuron(outputNeuronGene.activation, inputs);
+        // });
+
+        // const neurons = sortedNeuronGenes.map((neuronGene) => {
+        //     const inputConnectionGenes = backwardsConnectionGraph.get(neuronGene.neuronId);
+        //     const neuron = new FeedForwardNeuron(neuronGene.activation, []);
+
+        //     if (inputConnectionGenes == null) {
+        //         return neuron;
+        //     }
+
+        //     for (let idx = 0; idx < inputConnectionGenes.length; ++idx) {
+        //         const connectionGene = inputConnectionGenes[idx];
+
+        //         if (connectionGene.enabled) {
+        //             const inputNeuronIndex = sortedNeuronIdToIndex.get(connectionGene.inputNeuronId);
+        //             neuron.inputs.push(new FeedForwardConnection(inputNeuronIndex, connectionGene.weight));
+        //         }
+        //     }
+
+        //     return neuron;
+        // });
 
         return new FeedForwardNeuralNetwork(this.inputCount, this.outputCount, neurons);
     }
@@ -801,9 +647,8 @@ class _Genome {
 }
 
 class FeedForwardConnection {
-    constructor (neuron, neuronIndex, weight) {
+    constructor (neuron, weight) {
         this.neuron = neuron;
-        this.neuronIndex = neuronIndex;
         this.weight = weight;
     }
 }
@@ -814,21 +659,9 @@ class FeedForwardNeuron {
         this.inputs = inputs;
         this.value = 0;
     }
-
-    process() {
-        this.value = 0;
-        for (let idx = 0; idx < this.inputs.length; ++idx) {
-            const { weight, neuron } = this.inputs[idx];
-            this.value += neuron.value * weight;
-        }
-
-        this.value = this.activation(this.value);
-        return this.value;
-    }
 }
 
 class FeedForwardNeuralNetwork {
-    // constructor (inputNeurons, outputNeurons, neuronsToProcess) {
     constructor (inputNeuronsCount, outputNeuronsCount, neurons) {
         this.inputNeurons = neurons.slice(0, inputNeuronsCount);
         this.outputNeurons = neurons.slice(neurons.length - outputNeuronsCount);
@@ -846,10 +679,18 @@ class FeedForwardNeuralNetwork {
 
     process() {
         for (let idx = 0; idx < this.neuronsToProcess.length; ++idx) {
-            this.neuronsToProcess[idx].process();
+            const currentNeuron = this.neuronsToProcess[idx];
+
+            currentNeuron.value = 0;
+            for (let idx = 0; idx < currentNeuron.inputs.length; ++idx) {
+                const connection = currentNeuron.inputs[idx];
+                currentNeuron.value += connection.neuron.value * connection.weight;
+            }
+
+            currentNeuron.value = currentNeuron.activation(currentNeuron.value);
         }
 
-        return this.outputNeurons.map(neuron => neuron.value);
+        return this.outputNeurons;
     }
 }
 
@@ -1312,3 +1153,12 @@ async function main() {
 }
 
 window.addEventListener("load", main, false);
+
+/*
+console.time("innovationCounter.createBaseGenome");
+const innovationCounter = new InnovationCounter();
+const genome = innovationCounter.createBaseGenome(1000, 1000);
+const neuralNetwork = genome.toNeuralNetwork();
+console.log(neuralNetwork);
+console.timeEnd("innovationCounter.createBaseGenome");
+ */

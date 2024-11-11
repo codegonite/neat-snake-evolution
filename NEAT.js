@@ -230,5 +230,21 @@ class NeuralNetwork {
 
             currentNeuron.value = currentNeuron.activation(currentNeuron.value);
         }
+
+        return this;
     }
 }
+
+class Species {
+    constructor () {
+        this.leaderGenome  = leaderGenome;
+        this.memberGenomes = memberGenomes;
+        this.totalSpeciesFitness = totalSpeciesFitness;
+    }
+}
+
+const innovationCounter = new InnovationCounter();
+const genome = innovationCounter.createBaseGenome(5, 5, 5, 5, 5);
+const neuralNetwork = genome.toNeuralNetwork();
+
+

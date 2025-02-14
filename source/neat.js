@@ -69,24 +69,223 @@ class Genome {
         this.genomeId                 = genomeId
         this.inputCount               = inputCount
         this.outputCount              = outputCount
+        this.species                  = null
         this.connectionGenes          = []
         this.neuronGenes              = []
-        this.species                  = null
+        this.fitness                  = 0
         this._innovationNumberToIndex = new Map()
         this._neuronIdToIndex         = new Map()
     }
 
-    clone() {
-        const copyGenome = new Genome(this.genomeId, this.inputCount, this.outputCount)
+    static from({ genomeId, inputCount, outputCount, connectionGenes, neuronGenes }) {
+        const result = new Genome(genomeId, inputCount, outputCount)
+        
+        result.connectionGenes            = connectionGenes
+        result.neuronGenes                = neuronGenes
+        result._innovationNumberToIndex   = new Map(connectionGenes.map((e, i) => [ e.innovationNumber, i ]))
+        result._neuronIdToIndex           = new Map(neuronGenes.map((e, i) => [ e.neuronId, i ]))
 
-        for (let idx = 0; idx < this.neuronGenes.length; ++idx) {
-            copyGenome.addNeuronGene(this.neuronGenes[idx].clone())
+        return result
+    }
+
+    static compatibilityDistance(dominant, recessive, config) {
+        let excessGenes = 0
+        let disjointGenes = 0
+        let matchingGenes = 0
+        let totalWeightDifference = 0
+
+        const highestInnovationDominant = dominant.highestConnectionInnovation()
+        const highestInnovationRecessive = recessive.highestConnectionInnovation()
+
+        for (let idx0 = 0; idx0 < recessive.connectionGenes.length; ++idx0) {
+            const connectionGene = recessive.connectionGenes[idx0]
+            if (dominant.findConnectionGene(connectionGene.innovationNumber) == null) {
+                if (connectionGene.innovationNumber > highestInnovationDominant) {
+                    ++excessGenes
+                }
+                else {
+                    ++disjointGenes
+                }
+            }
         }
 
+        for (let idx0 = 0; idx0 < dominant.connectionGenes.length; ++idx0) {
+            const connectionGene0 = dominant.connectionGenes[idx0]
+            const connectionGene1 = recessive.findConnectionGene(connectionGene0.innovationNumber)
+            if (connectionGene1 == null) {
+                if (connectionGene0.innovationNumber > highestInnovationRecessive) {
+                    ++excessGenes
+                }
+                else {
+                    ++disjointGenes
+                }
+            }
+            else {
+                totalWeightDifference += Math.abs(connectionGene0.weight - connectionGene1.weight)
+                matchingGenes += 1
+            }
+        }
+
+        const averageWeightDifference = totalWeightDifference / Math.max(1, matchingGenes)
+
+        const highestNeuronIdDominant = dominant.highestNeuronId()
+        const highestNeuronIdRecessive = recessive.highestNeuronId()
+
+        for (let idx0 = 0; idx0 < recessive.neuronGenes.length; ++idx0) {
+            const neuronGene = recessive.neuronGenes[idx0]
+            if (dominant.findNeuronGene(neuronGene.neuronId) == null) {
+                if (neuronGene.neuronId > highestNeuronIdDominant) {
+                    ++excessGenes
+                }
+                else {
+                    ++disjointGenes
+                }
+            }
+        }
+
+        for (let idx0 = 0; idx0 < dominant.neuronGenes.length; ++idx0) {
+            const neuronGene = dominant.neuronGenes[idx0]
+            if (recessive.findNeuronGene(neuronGene.neuronId) == null) {
+                if (neuronGene.neuronId > highestNeuronIdRecessive) {
+                    ++excessGenes
+                }
+                else {
+                    ++disjointGenes
+                }
+            }
+            else {
+                matchingGenes += 1
+            }
+        }
+
+        const geneCount = dominant.connectionGenes.length + dominant.neuronGenes.length
+        return (excessGenes * config.excessGeneCoefficient + disjointGenes * config.disjointGeneCoefficient) / geneCount + averageWeightDifference * config.weightDifferenceCoefficient
+    }
+
+    static crossover(dominant, recessive, innovation) {
+        const offspring = new Genome(innovation.getGenomeId(), dominant.inputCount, dominant.outputCount)
+
+        for (const dominantGene of dominant.getNeuronGenes()) {
+            const recessiveGene = recessive.findNeuronGene(dominantGene.neuronId)
+
+            if (recessiveGene === null || recessiveGene === undefined) {
+                offspring.addNeuronGene(dominantGene.clone())
+            }
+            else {
+                offspring.addNeuronGene(NeuronGene.crossover(dominantGene, recessiveGene))
+            }
+        }
+
+        for (const dominantGene of dominant.getConnectionGenes()) {
+            const recessiveGene = recessive.findConnectionGene(dominantGene.innovationNumber)
+
+            if (recessiveGene === null || recessiveGene === undefined) {
+                offspring.addConnectionGene(dominantGene.clone())
+            }
+            else {
+                offspring.addConnectionGene(ConnectionGene.crossover(dominantGene, recessiveGene))
+            }
+        }
+
+        return offspring
+    }
+
+    static fromPrototype(prototype, innovationCounter) {
+        const genomeId = innovationCounter.getGenomeId()
+        const genome = new Genome(genomeId, prototype.inputCount, prototype.outputCount)
+
+        for (let idx = 0; idx < prototype.neuronGenes.length; ++idx) {
+            const { activation } = prototype.neuronGenes[idx]
+            const neuronId = innovationCounter.getNeuronId()
+            const neuronGene = new NeuronGene(neuronId, activation)
+            genome.addNeuronGene(neuronGene)
+        }
+
+        const oldNeuronIdToNewNeuronId = new Map(prototype.neuronGenes.map((e, i) => [ e.neuronId, genome.neuronGenes[i].neuronId ]))
+
+        for (let idx = 0; idx < prototype.connectionGenes.length; ++idx) {
+            const prototypeGene = prototype.connectionGenes[idx]
+            const inputNeuronId = oldNeuronIdToNewNeuronId.get(prototypeGene.inputNeuronId)
+            const outputNeuronId = oldNeuronIdToNewNeuronId.get(prototypeGene.outputNeuronId)
+            const weight = prototypeGene.weight
+            const enabled = prototypeGene.enabled
+            const innovationNumber = innovationCounter.getInnovationNumber()
+            const connectionGene = new ConnectionGene(innovationNumber, inputNeuronId, outputNeuronId, weight, enabled)
+            genome.addConnectionGene(connectionGene)
+        }
+
+        return genome
+    }
+
+    static fromTopology(layerCounts, activation, innovationCounter) {
+        const inputCount = layerCounts[0]
+        const outputCount = layerCounts[layerCounts.length - 1]
+        const genomeId = innovationCounter.getGenomeId()
+        const genome = new Genome(genomeId, inputCount, outputCount)
+        const layerNeuronGenes = []
+
+        for (let idx0 = 0; idx0 < layerCounts.length; ++idx0) {
+            const neuronGenes = []
+            const layerCount = layerCounts[idx0]
+
+            for (let idx1 = 0; idx1 < layerCount; ++idx1) {
+                const neuronId = innovationCounter.getNeuronId()
+                const neuronGene = new NeuronGene(neuronId, activation)
+                genome.addNeuronGene(neuronGene)
+                neuronGenes.push(neuronGene)
+            }
+
+            layerNeuronGenes.push(neuronGenes)
+        }
+
+        for (let idx0 = 1; idx0 < layerCounts.length; ++idx0) {
+            const prevLayer = layerNeuronGenes[idx0 - 1]
+            const currentLayer = layerNeuronGenes[idx0]
+
+            for (let idx1 = 0; idx1 < prevLayer.length; ++idx1) {
+                for (let idx2 = 0; idx2 < currentLayer.length; ++idx2) {
+                    const inputNeuronId  = prevLayer[idx1].neuronId
+                    const outputNeuronId = currentLayer[idx2].neuronId
+                    const innovation = innovationCounter.getInnovationNumber()
+                    const connectionGene = new ConnectionGene(innovation, inputNeuronId, outputNeuronId, 1, true)
+                    genome.addConnectionGene(connectionGene)
+                }
+            }
+        }
+
+        return genome
+    }
+
+    getNeuronGenes() { return this.neuronGenes }
+    getConnectionGenes() { return this.connectionGenes }
+
+    highestConnectionInnovation() {
+        let innovation = 0
         for (let idx = 0; idx < this.connectionGenes.length; ++idx) {
-            copyGenome.addConnectionGene(this.connectionGenes[idx].clone())
+            innovation = Math.max(innovation, this.connectionGenes[idx].innovationNumber)
         }
 
+        return innovation
+    }
+
+    highestNeuronId() {
+        let innovation = 0
+        for (let idx = 0; idx < this.neuronGenes.length; ++idx) {
+            innovation = Math.max(innovation, this.neuronGenes[idx].neuronId)
+        }
+
+        return innovation
+    }
+
+    clone() { return this.cloneUsingId(this.genomeId) }
+
+    cloneUsingId(genomeId) {
+        const copyGenome = new Genome(genomeId, this.inputCount, this.outputCount)
+        copyGenome.neuronGenes = this.neuronGenes.map(e => e.clone())
+        copyGenome.connectionGenes = this.connectionGenes.map(e => e.clone())
+        copyGenome._innovationNumberToIndex = new Map(this._innovationNumberToIndex)
+        copyGenome._neuronIdToIndex = new Map(this._neuronIdToIndex)
+        copyGenome.species = this.species
         return copyGenome
     }
 
@@ -129,19 +328,20 @@ class Genome {
     }
 
     findConnectionGene(innovationNumber) {
+        // return this.connectionGenes.get(innovationNumber)
         const index = this._innovationNumberToIndex.get(innovationNumber)
         return index != null ? this.connectionGenes[index] : null
     }
 
     findNeuronGene(neuronId) {
+        // return this.neuronGenes.get(neuronId)
         const index = this._neuronIdToIndex.get(neuronId)
         return index != null ? this.neuronGenes[index] : null
     }
 
     connectionMakesCycle(inputNeuronId, outputNeuronId) {
         const connectionGraph = new Map()
-        for (let idx = 0; idx < this.connectionGenes.length; ++idx) {
-            const connectionGene = this.connectionGenes[idx]
+        for (const connectionGene of this.getConnectionGenes()) {
             const outputNeurons = connectionGraph.get(connectionGene.inputNeuronId) || []
             outputNeurons.push(connectionGene.outputNeuronId)
             connectionGraph.set(connectionGene.inputNeuronId, outputNeurons)
@@ -169,28 +369,28 @@ class Genome {
         return false
     }
 
-    _topologicalSortNeuronGenes(neuronGenes, backwardsConnectionGraph) {
-        const visited = new Set()
-        const stack = []
+    topologicalSortUtil(neuronId, visited, stack, backwardsConnectionGraph) {
+        visited.add(neuronId)
 
-        const topologicalSortUtil = (neuronId) => {
-            visited.add(neuronId)
-
-            const connectionGenes = backwardsConnectionGraph.get(neuronId)
-            if (connectionGenes !== null && connectionGenes !== undefined) {
-                for (const connectionGene of connectionGenes) {
-                    if (!visited.has(connectionGene.inputNeuronId)) {
-                        topologicalSortUtil(connectionGene.inputNeuronId)
-                    }
+        const connectionGenes = backwardsConnectionGraph.get(neuronId)
+        if (connectionGenes !== null && connectionGenes !== undefined) {
+            for (const connectionGene of connectionGenes) {
+                if (!visited.has(connectionGene.inputNeuronId)) {
+                    this.topologicalSortUtil(connectionGene.inputNeuronId, visited, stack, backwardsConnectionGraph)
                 }
             }
-
-            stack.push(this.neuronGenes[this._neuronIdToIndex.get(neuronId)])
         }
+
+        stack.push(this.findNeuronGene(neuronId))
+    }
+
+    _topologicalSortNeuronGenes(neuronGenes, backwardsConnectionGraph) {
+        const stack = []
+        const visited = new Set()
 
         for (const neuronGene of neuronGenes) {
             if (!visited.has(neuronGene.neuronId)) {
-                topologicalSortUtil(neuronGene.neuronId)
+                this.topologicalSortUtil(neuronGene.neuronId, visited, stack, backwardsConnectionGraph)
             }
         }
 
@@ -210,7 +410,7 @@ class Genome {
             }
         }
 
-        const sortedNeuronGenes = this._topologicalSortNeuronGenes(this.neuronGenes, backwardsConnectionGraph)
+        const sortedNeuronGenes = this._topologicalSortNeuronGenes(this.getNeuronGenes(), backwardsConnectionGraph)
         const sortedNeuronIdToIndex = new Map(sortedNeuronGenes.map((neuronGene, idx) => [ neuronGene.neuronId, idx ]))
 
         const neurons = []
@@ -233,19 +433,112 @@ class Genome {
         return new NeuralNetwork(this.inputCount, this.outputCount, neurons)
     }
 
-    compatibilityDistance(other, c1, c2, c3) {
-        let excessGenes = 0
-        let disjointGenes = 0
-        let sharedGeneCount = 0
-        let totalWeightDifference = 0
+    randomizeWeights(config) {
+        for (let idx = 0; idx < this.connectionGenes.length; ++idx) {
+            this.connectionGenes[idx].weight = config.randomWeightRange * (Math.random() - 0.5)
+        }
 
-        let avgWeightDiff = totalWeightDifference / sharedGeneCount
-        return excessGenes * c1 + disjointGenes * c2 + avgWeightDiff * c3
+        return this
     }
 
-    randomizeWeights() {
-        for (let idx = 0; idx < this.connectionGenes.length; ++idx) {
-            this.connectionGenes[idx].weight = Math.random() - 0.5
+    mutateAddConnection(innovationCounter) {
+        const inputNeuron  = this.neuronGenes[Math.floor(this.neuronGenes.length * Math.random())]
+        const outputNeuron = this.neuronGenes[Math.floor(this.neuronGenes.length * Math.random())]
+
+        const existingConnection = this.findConnectionGene(inputNeuron.neuronId, outputNeuron.neuronId)
+
+        if (existingConnection !== null || existingConnection !== undefined) {
+            return
+        }
+
+        if (this.connectionMakesCycle(inputNeuron.neuronId, outputNeuron.neuronId)) {
+            return
+        }
+
+        const newConnection = new ConnectionGene(innovationCounter.getInnovationNumber(), inputNeuron.neuronId, outputNeuron.neuronId, 2 * Math.random() - 1)
+        this.addConnectionGene(newConnection)
+    }
+
+    mutateRemoveConnection() {
+        if (this.connectionGenes.length == 0) {
+            return
+        }
+
+        const connectionToRemove = this.connectionGenes[Math.floor(this.connectionGenes.length * Math.random())]
+        this.removeConnectionGene(connectionToRemove.innovationNumber)
+    }
+
+    mutateAddNeuron(innovationCounter) {
+        if (this.connectionGenes.length == 0) {
+            return
+        }
+
+        const connectionToSplit = this.connectionGenes[Math.floor(this.connectionGenes.length * Math.random())]
+        connectionToSplit.enabled = false
+
+        const newNeuron = new NeuronGene(innovationCounter.getNeuronId(), this.neuronGenes[0].activation)
+        this.addNeuronGene(newNeuron)
+        
+        this.addConnectionGene(new ConnectionGene(innovationCounter.getInnovationNumber(), connectionToSplit.inputNeuronId, newNeuron.neuronId, 1))
+        this.addConnectionGene(new ConnectionGene(innovationCounter.getInnovationNumber(), newNeuron.neuronId, connectionToSplit.outputNeuronId, connectionToSplit.weight))
+    }
+
+    mutateRemoveNeuron() {
+        if (this.neuronGenes.length - this.inputCount - this.outputCount <= 0) {
+            return
+        }
+
+        const neuronToRemove = this.neuronGenes[Math.floor(this.neuronGenes.length * Math.random())]
+        this.removeNeuronGene(neuronToRemove.neuronId)
+    }
+
+    mutateChangeWeight() {
+        if (this.connectionGenes.length == 0) {
+            return
+        }
+
+        const index = Math.floor(this.connectionGenes.length * Math.random())
+        const connectionToModify = this.connectionGenes[index]
+        connectionToModify.weight += Math.random() - 0.5
+    }
+
+    mutateSetWeight() {
+        if (this.connectionGenes.length == 0) {
+            return
+        }
+
+        const index = Math.floor(this.connectionGenes.length * Math.random())
+        const connectionToModify = this.connectionGenes[index]
+        connectionToModify.weight = 4.0 * Math.random() - 2.0
+    }
+
+    mutate(innovationCounter, config) {
+        if (config === null || config === undefined) {
+            throw new Error("The configuration must be defined!")
+        }
+
+        if (Math.random() < config.mutateAddConnectionRate) {
+            this.mutateAddConnection(innovationCounter)
+        }
+        
+        if (Math.random() < config.mutateRemoveConnectionRate) {
+            this.mutateRemoveConnection()
+        }
+        
+        if (Math.random() < config.mutateAddNeuronRate) {
+            this.mutateAddNeuron(innovationCounter)
+        }
+        
+        if (Math.random() < config.mutateRemoveNeuronRate) {
+            this.mutateRemoveNeuron()
+        }
+        
+        if (Math.random() < config.mutateChangeWeightRate) {
+            this.mutateChangeWeight()
+        }
+        
+        if (Math.random() < config.mutateSetWeightRate) {
+            this.mutateSetWeight()
         }
 
         return this
@@ -254,34 +547,262 @@ class Genome {
 
 class Species {
     constructor (leaderGenome) {
-        this.leaderGenome = leaderGenome
-        this.memberGenomes = [ leaderGenome ]
-        this.totalSpeciesFitness = 0
-        this.leaderSpeciesFitness = 0
-        this.leaderGenome.species = this
+        this.leader = leaderGenome
+        this.members = [ leaderGenome ]
+        this.leader.species = this
+        this.adjustedFitness = 0
+        this.totalFitness = 0
     }
 
     setLeaderGenome(genome) {
-        if (!this.memberGenomes.includes(genome)) {
+        if (!this.members.includes(genome)) {
             throw new Error("The leader genome must be a part of the species!")
         }
 
-        this.leaderGenome = genome
+        this.leader = genome
+        genome.species = this
     }
 
-    addGenome(genome, fitness) {
-        this.memberGenomes.push(genome)
-        this.totalSpeciesFitness -= fitness
+    updateLeaderGenome() {
+        for (let idx = 0; idx < this.members.length; ++idx) {
+            const member = this.members[idx]
+            if (this.leader.fitness < member.fitness) {
+                this.leader = member
+            }
+        }
+
+        return this.leader
+    }
+
+    updateFitness() {
+        this.totalFitness = 0
+        
+        for (let idx = 0; idx < this.members.length; ++idx) {
+            this.totalFitness += this.members[idx].fitness
+        }
+
+        // this.adjustedFitness = this.totalFitness / this.members.length
+    }
+
+    addGenome(genome) {
+        genome.species = this
+        this.members.push(genome)
+        // this.totalFitness += genome.fitness
+        // if (this.leader.fitness < genome.fitness) {
+        //     this.leader = genome
+        // }
+    }
+
+    reset(leaderGenome) {
+        this.leader = leaderGenome
+        this.members = []
+        this.leader.species = this
+        this.totalFitness = 0
     }
 }
 
+function selectRandomSpeciesFitnessBiased(speciesArray) {
+    let totalAdjustedFitness = 0
+    for (let idx = 0; idx < speciesArray.length; ++idx) {
+        const species = speciesArray[idx]
+        totalAdjustedFitness += species.totalFitness / species.members.length
+    }
+
+    let accumulatedFitness = 0
+    const randomFitness = totalAdjustedFitness * Math.random()
+    for (let idx = 0; idx < speciesArray.length; ++idx) {
+        const species = speciesArray[idx]
+        accumulatedFitness += species.totalFitness / species.members.length
+
+        if (accumulatedFitness >= randomFitness) {
+            return species
+        }
+    }
+
+    throw new Error(`Selected a species from outside the array bounds! randomFitness: ${randomFitness} totalAdjustedFitness: ${totalAdjustedFitness}`)
+}
+
+function selectRandomGenomeFromSpeciesFitnessBiased(species) {
+    // let totalFitness = 0
+    // for (let idx = 0; idx < species.members.length; ++idx) {
+    //     totalFitness += species.members[idx].fitness
+    // }
+
+    let accumulatedFitness = 0
+    const randomFitness = species.totalFitness * Math.random()
+    for (let idx = 0; idx < species.members.length; ++idx) {
+        const genome = species.members[idx]
+
+        accumulatedFitness += genome.fitness
+        if (accumulatedFitness >= randomFitness) {
+            return genome
+        }
+
+    }
+
+    throw new Error(`Selected a genome from outside the array bounds! randomFitness: ${randomFitness} totalFitness: ${species.totalFitness}`)
+}
+
+function groupGenomesIntoSpecies(genomes, config) {
+    const speciesArray = []
+
+    loop: for (let idx0 = 0; idx0 < genomes.length; ++idx0) {
+        const genome = genomes[idx0]
+        for (let idx1 = 0; idx1 < speciesArray.length; ++idx1) {
+            const species = speciesArray[idx1]
+
+            if (Genome.compatibilityDistance(species.leader, genome, config) < this.config.compatibilityThreshold) {
+                species.addGenome(genome)
+                continue loop
+            }
+        }
+
+        speciesArray.push(new Species(genome))
+    }
+
+    return speciesArray
+}
+
 class Population {
-    constructor () {
+    constructor (populationCount = 100, startingGenome, innovationCounter, config) {
+        this.innovationCounter = innovationCounter
+        this.populationCount = populationCount
+        this.startingGenome = startingGenome
+        this.config = config
         this.species = []
+        this.genomes = []
+
+        while (this.genomes.length < this.populationCount) {
+            const genomeId = this.innovationCounter.getGenomeId()
+            this.genomes.push(this.startingGenome.cloneUsingId(genomeId).randomizeWeights(config))
+            // this.genomes.push(this.startingGenome.cloneUsingId(genomeId).mutate(innovationCounter, config))
+        }
+
+        // this.species = groupGenomesIntoSpecies(this.genomes, this.config)
+    }
+
+    evaluate(callback) {
+        // console.log("Evaluating the genomes")
+        for (let idx = 0; idx < this.genomes.length; ++idx) {
+            this.genomes[idx].fitness = callback(this.genomes[idx])
+        }
+
+        for (let idx = 0; idx < this.species.length; ++idx) {
+            this.species[idx].updateFitness()
+        }
+    }
+
+    removeUnusedSpecies() {
+        for (let idx = this.species.length - 1; idx >= 0; --idx) {
+            const species = this.species[idx]
+
+            if (species.members.length == 0) {
+                this.species.splice(idx, 1)
+            }
+        }
+    }
+
+    // repopulateGenomes() {
+    //     // console.log("Repopulating the list of genomes")
+
+    //     let newGenomes = []
+    //     for (let idx = 0; idx < this.species.length; ++idx) {
+    //         const species = this.species[idx]
+    //         const leader = species.updateLeaderGenome()
+    //         species.reset(leader)
+    //         newGenomes.push(leader)
+    //     }
+
+    //     newGenomes = newGenomes.sort((a, b) => b.fitness - a.fitness).slice(0, this.config.generationCuttoff)
+
+    //     while (newGenomes.length < this.populationCount) {
+    //         const species   = selectRandomSpeciesFitnessBiased(this.species)
+    //         const genome0   = selectRandomGenomeFromSpeciesFitnessBiased(species)
+    //         const genome1   = selectRandomGenomeFromSpeciesFitnessBiased(species)
+    //         const dominant  = genome0.fitness > genome1.fitness ? genome0 : genome1
+    //         const recessive = genome0.fitness > genome1.fitness ? genome1 : genome0
+    //         const newGenome = Genome.crossover(dominant, recessive, this.innovationCounter).mutate(this.innovationCounter, this.config)
+    //         newGenomes.push(newGenome)
+    //     }
+
+    //     this.genomes = newGenomes
+    //     this.species = groupGenomesIntoSpecies(this.genomes, this.config)
+    // }
+
+    processGeneration(callback) {
+        for (let idx = 0; idx < this.species.length; ++idx) {
+            const species = this.species[idx]
+            species.reset(species.updateLeaderGenome())
+        }
+        
+        loop: for (let idx0 = 0; idx0 < this.genomes.length; ++idx0) {
+            const genome = this.genomes[idx0]
+            for (let idx1 = 0; idx1 < this.species.length; ++idx1) {
+                const species = this.species[idx1]
+
+                if (Genome.compatibilityDistance(species.leader, genome, this.config) < this.config.compatibilityThreshold) {
+                    species.addGenome(genome)
+                    continue loop
+                }
+            }
+
+            this.species.push(new Species(genome))
+        }
+
+        for (let idx = this.species.length - 1; idx >= 0; --idx) {
+            const species = this.species[idx]
+
+            if (species.members.length == 0) {
+                this.species.splice(idx, 1)
+            }
+        }
+
+        for (let idx = 0; idx < this.genomes.length; ++idx) {
+            const genome = this.genomes[idx]
+            if (genome.species == null) {
+                throw new Error()
+            }
+
+            genome.fitness = callback(genome)
+            genome.species.totalFitness += genome.fitness
+        }
+
+        let newGenomes = []
+        for (let idx = 0; idx < this.species.length; ++idx) {
+            const species = this.species[idx]
+            newGenomes.push(species.leader)
+        }
+
+        while (newGenomes.length < this.populationCount) {
+            const species   = selectRandomSpeciesFitnessBiased(this.species)
+            const genome0   = selectRandomGenomeFromSpeciesFitnessBiased(species)
+            const genome1   = selectRandomGenomeFromSpeciesFitnessBiased(species)
+            const dominant  = genome0.fitness > genome1.fitness ? genome0 : genome1
+            const recessive = genome0.fitness > genome1.fitness ? genome1 : genome0
+            const newGenome = Genome.crossover(dominant, recessive, this.innovationCounter).mutate(this.innovationCounter, this.config)
+            newGenomes.push(newGenome)
+        }
+
+        this.genomes = newGenomes
     }
 }
 
 class Configuration {
+    constructor (object = {}) {
+        this.excessGeneCoefficient = object.excessGeneCoefficient ?? 1.0
+        this.disjointGeneCoefficient = object.disjointGeneCoefficient ?? 1.0
+        this.weightDifferenceCoefficient = object.weightDifferenceCoefficient ?? 0.4
+        this.compatibilityThreshold = object.compatibilityThreshold ?? 80.0
+        this.generationCuttoff = object.generationCuttoff ?? 10
+        this.mutateAddConnectionRate = object.mutateAddConnectionRate ?? 0.1
+        this.mutateRemoveConnectionRate = object.mutateRemoveConnectionRate ?? 0.1
+        this.mutateAddNeuronRate = object.mutateAddNeuronRate ?? 0.1
+        this.mutateRemoveNeuronRate = object.mutateRemoveNeuronRate ?? 0.1
+        this.mutateChangeWeightRate = object.mutateChangeWeightRate ?? 0.5
+        this.mutateSetWeightRate = object.mutateSetWeightRate ?? 0.5
+        this.randomWeightRange = object.randomWeightRange ?? 2.0
+        this.changeWeightRange = object.changeWeightRange ?? 2.0
+    }
 }
 
 class InnovationCounter {
@@ -291,180 +812,174 @@ class InnovationCounter {
         this.genomeCounter = genomeCounter
     }
 
-    createNeuronGene(activation) {
-        return new NeuronGene(this.neuronCounter++, activation)
-    }
+    getNeuronId() { return this.neuronCounter++ }
+    getGenomeId() { return this.genomeCounter++ }
+    getInnovationNumber() { return this.innovationCounter++ }
 
-    createConnectionGene(inputNeuronId, outputNeuronId, weight, enabled = true) {
-        return new ConnectionGene(this.innovationCounter++, inputNeuronId, outputNeuronId, weight, enabled)
-    }
+    // createBaseGenome(activation, layerCounts) {
+    //     const inputCount = layerCounts[0]
+    //     const outputCount = layerCounts[layerCounts.length - 1]
+    //     const genome = new Genome(this.getGenomeId(), inputCount, outputCount)
+    //     const layerNeuronGenes = []
 
-    createGenome(inputCount, outputCount) {
-        return new Genome(this.genomeCounter++, inputCount, outputCount)
-    }
+    //     for (let idx0 = 0; idx0 < layerCounts.length; ++idx0) {
+    //         const neuronGenes = []
+    //         const layerCount = layerCounts[idx0]
 
-    createBaseGenome(activation, layerCounts) {
-        const genome = this.createGenome(layerCounts[0], layerCounts[layerCounts.length - 1])
-        const layerNeuronGenes = []
+    //         for (let idx1 = 0; idx1 < layerCount; ++idx1) {
+    //             const neuronGene = new NeuronGene(this.getNeuronId(), activation)
+    //             genome.addNeuronGene(neuronGene)
+    //             neuronGenes.push(neuronGene)
+    //         }
 
-        for (let idx0 = 0; idx0 < layerCounts.length; ++idx0) {
-            const neuronGenes = []
-            const layerCount = layerCounts[idx0]
+    //         layerNeuronGenes.push(neuronGenes)
+    //     }
 
-            for (let idx1 = 0; idx1 < layerCount; ++idx1) {
-                const neuronGene = this.createNeuronGene(activation)
-                genome.addNeuronGene(neuronGene)
-                neuronGenes.push(neuronGene)
-            }
+    //     for (let idx0 = 1; idx0 < layerCounts.length; ++idx0) {
+    //         const prevLayer = layerNeuronGenes[idx0 - 1]
+    //         const currentLayer = layerNeuronGenes[idx0]
 
-            layerNeuronGenes.push(neuronGenes)
-        }
+    //         for (let idx1 = 0; idx1 < prevLayer.length; ++idx1) {
+    //             for (let idx2 = 0; idx2 < currentLayer.length; ++idx2) {
+    //                 const inputNeuron  = prevLayer[idx1]
+    //                 const outputNeuron = currentLayer[idx2]
+    //                 const connectionGene = new ConnectionGene(this.getInnovationNumber(), inputNeuron.neuronId, outputNeuron.neuronId, 1, true)
+    //                 genome.addConnectionGene(connectionGene)
+    //             }
+    //         }
+    //     }
 
-        for (let idx0 = 1; idx0 < layerCounts.length; ++idx0) {
-            const prevLayer = layerNeuronGenes[idx0 - 1]
-            const currentLayer = layerNeuronGenes[idx0]
+    //     return genome
+    // }
 
-            for (let idx1 = 0; idx1 < prevLayer.length; ++idx1) {
-                for (let idx2 = 0; idx2 < currentLayer.length; ++idx2) {
-                    const inputNeuron  = prevLayer[idx1]
-                    const outputNeuron = currentLayer[idx2]
-                    const connectionGene = this.createConnectionGene(inputNeuron.neuronId, outputNeuron.neuronId, 1, true)
-                    genome.addConnectionGene(connectionGene)
-                }
-            }
-        }
+    // createGenomeCrossover(dominant, recessive) {
+    //     const offspring = new Genome(this.getGenomeId(), dominant.inputCount, dominant.outputCount)
 
-        return genome
-    }
+    //     for (const dominantGene of dominant.getNeuronGenes()) {
+    //         const recessiveGene = recessive.findNeuronGene(dominantGene.neuronId)
 
-    createGenomeCrossover(dominant, recessive) {
-        const offspring = this.createGenome(dominant.inputCount, dominant.outputCount)
+    //         if (recessiveGene === null || recessiveGene === undefined) {
+    //             offspring.addNeuronGene(dominantGene.clone())
+    //         }
+    //         else {
+    //             offspring.addNeuronGene(NeuronGene.crossover(dominantGene, recessiveGene))
+    //         }
+    //     }
 
-        for (const dominantGene of dominant.neuronGenes) {
-            const recessiveGene = recessive.findNeuronGene(dominantGene.neuronId)
+    //     for (const dominantGene of dominant.getConnectionGenes()) {
+    //         const recessiveGene = recessive.findConnectionGene(dominantGene.innovationNumber)
 
-            if (recessiveGene === null || recessiveGene === undefined) {
-                offspring.addNeuronGene(dominantGene.clone())
-            }
-            else {
-                offspring.addNeuronGene(NeuronGene.crossover(dominantGene, recessiveGene))
-            }
-        }
+    //         if (recessiveGene === null || recessiveGene === undefined) {
+    //             offspring.addConnectionGene(dominantGene.clone())
+    //         }
+    //         else {
+    //             offspring.addConnectionGene(ConnectionGene.crossover(dominantGene, recessiveGene))
+    //         }
+    //     }
 
-        for (const dominantGene of dominant.connectionGenes) {
-            const recessiveGene = recessive.findConnectionGene(dominantGene.innovationNumber)
+    //     return offspring
+    // }
 
-            if (recessiveGene === null || recessiveGene === undefined) {
-                offspring.addConnectionGene(dominantGene.clone())
-            }
-            else {
-                offspring.addConnectionGene(ConnectionGene.crossover(dominantGene, recessiveGene))
-            }
-        }
+    // mutateAddConnection(genome) {
+    //     const inputNeuron  = genome.neuronGenes[Math.floor(genome.neuronGenes.length * Math.random())]
+    //     const outputNeuron = genome.neuronGenes[Math.floor(genome.neuronGenes.length * Math.random())]
 
-        return offspring
-    }
+    //     const existingConnection = genome.findConnectionGene(inputNeuron.neuronId, outputNeuron.neuronId)
 
-    mutateAddConnection(genome) {
-        const inputNeuron  = genome.neuronGenes[Math.floor(genome.neuronGenes.length * Math.random())]
-        const outputNeuron = genome.neuronGenes[Math.floor(genome.neuronGenes.length * Math.random())]
+    //     if (existingConnection !== null || existingConnection !== undefined) {
+    //         return
+    //     }
 
-        const existingConnection = genome.findConnectionGene(inputNeuron.neuronId, outputNeuron.neuronId)
+    //     if (genome.connectionMakesCycle(inputNeuron.neuronId, outputNeuron.neuronId)) {
+    //         return
+    //     }
 
-        if (existingConnection !== null || existingConnection !== undefined) {
-            return
-        }
+    //     const newConnection = new ConnectionGene(this.getInnovationNumber(), inputNeuron.neuronId, outputNeuron.neuronId, 2 * Math.random() - 1)
+    //     genome.addConnectionGene(newConnection)
+    // }
 
-        if (genome.connectionMakesCycle(inputNeuron.neuronId, outputNeuron.neuronId)) {
-            return
-        }
+    // mutateRemoveConnection(genome) {
+    //     if (genome.connectionGenes.length == 0) {
+    //         return
+    //     }
 
-        const newConnection = this.createConnectionGene(inputNeuron.neuronId, outputNeuron.neuronId, 2 * Math.random() - 1)
-        genome.addConnectionGene(newConnection)
-    }
+    //     const connectionToRemove = genome.connectionGenes[Math.floor(genome.connectionGenes.length * Math.random())]
+    //     genome.removeConnectionGene(connectionToRemove.innovationNumber)
+    // }
 
-    mutateRemoveConnection(genome) {
-        if (genome.connectionGenes.length == 0) {
-            return
-        }
+    // mutateAddNeuron(genome) {
+    //     if (genome.connectionGenes.length == 0) {
+    //         return
+    //     }
 
-        const connectionToRemove = genome.connectionGenes[Math.floor(genome.connectionGenes.length * Math.random())]
-        genome.removeConnectionGene(connectionToRemove.innovationNumber)
-    }
+    //     const connectionToSplit = genome.connectionGenes[Math.floor(genome.connectionGenes.length * Math.random())]
+    //     connectionToSplit.enabled = false
 
-    mutateAddNeuron(genome) {
-        if (genome.connectionGenes.length == 0) {
-            return
-        }
-
-        const connectionToSplit = genome.connectionGenes[Math.floor(genome.connectionGenes.length * Math.random())]
-        connectionToSplit.enabled = false
-
-        const newNeuron = this.createNeuronGene(genome.neuronGenes[0].activation)
-        genome.addNeuronGene(newNeuron)
+    //     const newNeuron = new NeuronGene(this.getNeuronId(), genome.neuronGenes[0].activation)
+    //     genome.addNeuronGene(newNeuron)
         
-        genome.addConnectionGene(this.createConnectionGene(connectionToSplit.inputNeuronId, newNeuron.neuronId,               1))
-        genome.addConnectionGene(this.createConnectionGene(newNeuron.neuronId,              connectionToSplit.outputNeuronId, connectionToSplit.weight))
-    }
+    //     genome.addConnectionGene(new ConnectionGene(this.getInnovationNumber(), connectionToSplit.inputNeuronId, newNeuron.neuronId, 1))
+    //     genome.addConnectionGene(new ConnectionGene(this.getInnovationNumber(), newNeuron.neuronId, connectionToSplit.outputNeuronId, connectionToSplit.weight))
+    // }
 
-    mutateRemoveNeuron(genome) {
-        if (genome.neuronGenes.length - genome.inputCount - genome.outputCount <= 0) {
-            return
-        }
+    // mutateRemoveNeuron(genome) {
+    //     if (genome.neuronGenes.length - genome.inputCount - genome.outputCount <= 0) {
+    //         return
+    //     }
 
-        const neuronToRemove = genome.neuronGenes[Math.floor(genome.neuronGenes.length * Math.random())]
-        genome.removeNeuronGene(neuronToRemove.neuronId)
-    }
+    //     const neuronToRemove = genome.neuronGenes[Math.floor(genome.neuronGenes.length * Math.random())]
+    //     genome.removeNeuronGene(neuronToRemove.neuronId)
+    // }
 
-    mutateChangeWeight(genome) {
-        if (genome.connectionGenes.length == 0) {
-            return
-        }
+    // mutateChangeWeight(genome) {
+    //     if (genome.connectionGenes.length == 0) {
+    //         return
+    //     }
 
-        const index = Math.floor(genome.connectionGenes.length * Math.random())
-        const connectionToModify = genome.connectionGenes[index]
-        connectionToModify.weight += Math.random()
-    }
+    //     const index = Math.floor(genome.connectionGenes.length * Math.random())
+    //     const connectionToModify = genome.connectionGenes[index]
+    //     connectionToModify.weight += Math.random()
+    // }
 
-    mutateSetWeight(genome) {
-        if (genome.connectionGenes.length == 0) {
-            return
-        }
+    // mutateSetWeight(genome) {
+    //     if (genome.connectionGenes.length == 0) {
+    //         return
+    //     }
 
-        const index = Math.floor(genome.connectionGenes.length * Math.random())
-        const connectionToModify = genome.connectionGenes[index]
-        connectionToModify.weight = 4 * Math.random() - 2
-    }
+    //     const index = Math.floor(genome.connectionGenes.length * Math.random())
+    //     const connectionToModify = genome.connectionGenes[index]
+    //     connectionToModify.weight = 4 * Math.random() - 2
+    // }
 
-    mutateGenome(genome) {
-        const result = genome.clone()
+    // mutateGenome(genome) {
+    //     const result = genome.clone()
 
-        if (Math.random() < MUTATE_ADD_CONNECTION_RATE) {
-            this.mutateAddConnection(result)
-        }
+    //     if (Math.random() < MUTATE_ADD_CONNECTION_RATE) {
+    //         this.mutateAddConnection(result)
+    //     }
 
-        if (Math.random() < MUTATE_REMOVE_CONNECTION_RATE) {
-            this.mutateRemoveConnection(result)
-        }
+    //     if (Math.random() < MUTATE_REMOVE_CONNECTION_RATE) {
+    //         this.mutateRemoveConnection(result)
+    //     }
 
-        if (Math.random() < MUTATE_ADD_NEURON_RATE) {
-            this.mutateAddNeuron(result)
-        }
+    //     if (Math.random() < MUTATE_ADD_NEURON_RATE) {
+    //         this.mutateAddNeuron(result)
+    //     }
 
-        if (Math.random() < MUTATE_REMOVE_NEURON_RATE) {
-            this.mutateRemoveNeuron(result)
-        }
+    //     if (Math.random() < MUTATE_REMOVE_NEURON_RATE) {
+    //         this.mutateRemoveNeuron(result)
+    //     }
 
-        if (Math.random() < MUTATE_CHANGE_WEIGHT_RATE) {
-            this.mutateChangeWeight(result)
-        }
+    //     if (Math.random() < MUTATE_CHANGE_WEIGHT_RATE) {
+    //         this.mutateChangeWeight(result)
+    //     }
 
-        if (Math.random() < MUTATE_SET_WEIGHT_RATE) {
-            this.mutateSetWeight(result)
-        }
+    //     if (Math.random() < MUTATE_SET_WEIGHT_RATE) {
+    //         this.mutateSetWeight(result)
+    //     }
 
-        return result
-    }
+    //     return result
+    // }
 }
 
 class NeuralNetworkConnection {
@@ -491,9 +1006,6 @@ class NeuralNetwork {
         this.inputCount = inputCount
         this.outputCount = outputCount
         this.neurons = neurons
-    }
-
-    static from(genome) {
     }
 
     process(... values) {
@@ -530,14 +1042,14 @@ class NeuralNetwork {
     }
 }
 
-function addGenomeToSpeciesArray(speciesArray, genome) {
-    for (let idx = 0; idx < speciesArray.length; ++idx) {
-        const species = this.species[idx]
-        if (species.leaderGenome.compatibilityDistance(genome, C1, C2, C3) < DT) {
-            species.addGenome(genome)
-            return
-        }
-    }
+// function addGenomeToSpeciesArray(speciesArray, genome) {
+//     for (let idx = 0; idx < speciesArray.length; ++idx) {
+//         const species = this.species[idx]
+//         if (species.leaderGenome.compatibilityDistance(genome, excessGeneCoefficient, disjointGeneCoefficient, weightDifferenceCoefficient) < DT) {
+//             species.addGenome(genome)
+//             return
+//         }
+//     }
 
-    speciesArray.push(new Species(genome))
-}
+//     speciesArray.push(new Species(genome))
+// }

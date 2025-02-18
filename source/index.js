@@ -1,5 +1,6 @@
 const FRAMES_PER_MILLISECOND = 24 / 1000
 const MILLISECONDS_PER_FRAME = 1.0 / FRAMES_PER_MILLISECOND
+const MAX_MILLISECONDS_PER_FRAME = 1000 / 30
 
 const GRID_TYPE_NONE = 0x00
 const GRID_TYPE_FOOD  = 0x01
@@ -23,6 +24,8 @@ const SNAKE_NEURAL_NETWORK_BASE_TOPOLOGY = [ 33, 4 ]
 // const SNAKE_NEURAL_NETWORK_BASE_TOPOLOGY = [ 25, 4 ]
 // const SNAKE_NEURAL_NETWORK_BASE_TOPOLOGY = [ 25, 4 ]
 const LASTING_SPACES_UNTIL_GAMEOVER = 350
+const MAXIMUM_SNAKE_LENGTH = 400
+const MAXIMUM_GAME_DURATION = MAXIMUM_SNAKE_LENGTH * MAXIMUM_SNAKE_LENGTH
 const POPULATION_COUNT = 500
 
 const TARGET_COLOUR = "#01796F"
@@ -371,6 +374,26 @@ class SnakeGame {
         this.reset()
     }
 
+    clone() {
+        const copy = new SnakeGame()
+
+        copy.cols                 = this.cols
+        copy.rows                 = this.rows
+        copy.snake                = this.snake.clone()
+        copy.target               = this.target.clone()
+        copy.state                = this.state
+        copy.genome               = this.genome ? this.genome.clone() : null
+        copy.neuralNetwork        = this.neuralNetwork ? this.neuralNetwork.clone() : null
+        copy.ticksSinceLastTarget = this.ticksSinceLastTarget
+        copy.durationInTicks      = this.durationInTicks
+        copy.score                = this.score
+        copy.accumulatedFitness   = this.accumulatedFitness
+        copy.squareSpaces         = this.squareSpaces
+        copy.tempGrid             = this.tempGrid.slice()
+
+        this.reset()
+    }
+
     setGenome(genome) {
         this.genome = genome
         this.neuralNetwork = genome.toNeuralNetwork()
@@ -382,11 +405,16 @@ class SnakeGame {
     //     // return 2 ** this.score + Math.log(1 + this.durationInTicks ** 1.2)
     // }
 
+    getFitness() {
+        return Math.max(0.1, this.durationInTicks + 500 * this.score ** (1 + this.score / 50) - (.25 * this.durationInTicks) ** 1.3 * this.score ** 1.2)
+        // return Math.max(0.1, this.durationInTicks + 500 * this.score * this.score * this.score * this.score - (.15 * this.durationInTicks) ** 1.3 * this.score ** 1.2)
+    }
+
     // getFitness() {
     //     return (4 * this.score ** 2) * (this.durationInTicks ** 1.2)
     // }
 
-    getFitness() {
+    _getFitness() {
         // return 2.5 ** this.score + Math.log(1 + this.durationInTicks)
         // return Math.max(0.01, 2 ** (1 + this.score / 400) + this.durationInTicks / (this.squareSpaces * this.squareSpaces))
         // if (this.score < 10) {
@@ -416,7 +444,8 @@ class SnakeGame {
         // return Math.max(0.1, this.durationInTicks - this.score * (0.10 * this.durationInTicks) ** 1.25 + 750 * this.score ** 2.5)
         // return Math.max(0.1, this.durationInTicks - 1000 * this.durationInTicks / Math.max(1, this.score) + 750 * this.score ** 2.5)
         // return Math.max(0.1, this.durationInTicks + 1.25 ** this.score + 500 * this.score ** 2.0 - (.25 * this.durationInTicks) ** 1.3 * this.score ** 1.2)
-        return Math.max(0.1, this.durationInTicks + 2.1 ** this.score + 500 * this.score * this.score - (.25 * this.durationInTicks) ** 1.3 * this.score ** 1.2)
+        const factor = this.snake.body.length == this.cols * this.rows ? 2 : 1
+        return factor * Math.max(0.1, this.durationInTicks + 2.1 ** this.score + 500 * this.score * this.score - (.25 * this.durationInTicks) ** 1.3 * this.score ** 1.2)
 
         // return Math.max(1, this.score) ** 2 * Math.max(1, this.durationInTicks) ** 1.5
         // return Math.max(1, this.score) ** 2 * this.durationInTicks / Math.max(1, this.score)
@@ -517,6 +546,8 @@ class SnakeGame {
             distanceToTargetY > 0 ? 1 : 0,
             distanceToTargetX > 0 ? 0 : 1,
             distanceToTargetY > 0 ? 0 : 1,
+            // distanceToTargetX < 0 ? 1 : 0,
+            // distanceToTargetY < 0 ? 1 : 0,
             1
         )
 
@@ -700,7 +731,7 @@ class Simulation {
         this.context = context
         this.innovationCounter = new InnovationCounter()
         
-        this.populationSize = 500
+        this.populationSize = 1
         this.generationCutoffCount = 10
         this.frameRate = 24
         this.updatesPerFrame = 1
@@ -713,8 +744,10 @@ class Simulation {
         
         // this.startingGenome = Genome.fromTopology(SNAKE_NEURAL_NETWORK_BASE_TOPOLOGY, sigmod, this.innovationCounter)
         
+        this.startingGenome = Genome.fromPrototype(genome399, this.innovationCounter)
         // this.startingGenome = Genome.fromPrototype(binaryPretrainedGenomeScoreOf236, this.innovationCounter)
-        this.startingGenome = Genome.fromPrototype(binaryPretrainedGenomeScoreOf296, this.innovationCounter)
+        // this.startingGenome = Genome.fromPrototype(binaryPretrainedGenomeScoreOf296, this.innovationCounter)
+        // this.startingGenome = Genome.fromPrototype(pretrainedGenomeWithScoreOf212, this.innovationCounter)
         // this.startingGenome = Genome.fromPrototype(binaryPretrainedGenome, this.innovationCounter)
         // this.startingGenome = Genome.fromPrototype(genomeWithBestScoreOf50, this.innovationCounter)
         // this.startingGenome = Genome.fromPrototype(genomeWith70BestScore, this.innovationCounter)
@@ -929,6 +962,39 @@ class Simulation {
     }
 }
 
+class GenerationStatistics {
+    constructor () {
+        this.totalScore = 0
+        this.totalNeuronCount = 0
+        this.bestScore = 0
+        this.count = 0
+    }
+
+    copy(other) {
+        this.totalScore = other.totalScore
+        this.totalNeuronCount = other.totalNeuronCount
+        this.bestScore = other.bestScore
+        this.count = other.count
+    }
+
+    record(genome, game) {
+        this.totalScore += game.score
+        this.totalNeuronCount += genome.neuronGenes.length
+        this.bestScore = Math.max(this.bestScore, game.score)
+        ++this.count
+    }
+
+    reset() {
+        this.totalScore = 0
+        this.totalNeuronCount = 0
+        this.bestScore = 0
+        this.count = 0
+    }
+
+    get averageNeuronCount() { return this.totalNeuronCount / Math.max(1, this.count) }
+    get averageScore() { return this.totalScore / Math.max(1, this.count) }
+}
+
 class GraphSimulation {
     constructor (
         population = null,
@@ -938,20 +1004,139 @@ class GraphSimulation {
         this.population = population
         this.snakeGame = snakeGame
 
-        this.fitnessPerGeneration = []
         this.averageScorePerGeneration = []
         this.bestScorePerGeneration = []
+        this.maxUpdatesPerFrame = 6000000
 
         this.bestGenome = this.population.genomes[0]
-        this.bestScore = null
-        this.bestAverageScore = 0
+        this.fittestGenome = this.population.genomes[0]
+        // this.defaultGenerationInfo = new GenerationStatistics()
+
+        this.prevGenerationInfo = new GenerationStatistics()
+        this.generationInfo = new GenerationStatistics()
+
+        this.allTimeBestScore = 0
+
+        // this.generationTotalScore = 0
+        // this.generationTotalNeuronCount = 0
+        // this.generationBestScore = 0
+        // this.averageNeuronCount = 0
+
+        this.genomeIndex = 0
         this.requestId = null
-        this.averageNeuronCount = 0
 
         this.totalGenerationCount = generationCount
+
+        this.population.specifyGenomes()
+    }
+
+    isGenerationDone() { return this.genomeIndex == this.population.genomes.length }
+    isGenerationStarting() { return this.genomeIndex == 0 }
+
+    nextGeneration() {
+        // this.generationTotalScore = 0
+        // this.generationTotalNeuronCount = 0
+        // this.generationBestScore = 0
+
+        this.averageScorePerGeneration.push(this.generationInfo.averageScore)
+        this.bestScorePerGeneration.push(this.generationInfo.bestScore)
+        this.allTimeBestScore = Math.max(this.allTimeBestScore, this.generationInfo.bestScore)
+
+        this.population.repopulate()
+        this.population.specifyGenomes()
+        this.prevGenerationInfo.copy(this.generationInfo)
+        this.generationInfo.reset()
+        this.genomeIndex = 0
+    }
+
+    graduallyProcessGeneration(maximumTime) {
+        let updates = 0
+        const finishTime = Date.now() + maximumTime
+        while (Date.now() < finishTime && updates < this.maxUpdatesPerFrame && this.genomeIndex < this.population.genomes.length) {
+            // console.log(this.genomeIndex, Date.now() - timestamp)
+            const genome = this.population.genomes[this.genomeIndex++]
+
+            this.snakeGame.reset()
+            this.snakeGame.neuralNetwork = genome.toNeuralNetwork()
+
+            while (this.snakeGame.state                != SNAKE_GAME_STATE_GAME_OVER
+            &&     this.snakeGame.ticksSinceLastTarget <  LASTING_SPACES_UNTIL_GAMEOVER
+            &&     this.snakeGame.snake.length         <  MAXIMUM_SNAKE_LENGTH
+            &&     this.snakeGame.durationInTicks      <  MAXIMUM_GAME_DURATION) {
+                this.snakeGame.update()
+                ++updates
+            }
+
+            this.generationInfo.record(genome, this.snakeGame)
+
+            // this.currentGenerationRecord.record(this.population, genome, this.snakeGame)
+
+            // this.generationTotalScore += this.snakeGame.score
+            // this.generationTotalNeuronCount += genome.neuronGenes.length
+            // this.generationBestScore = Math.max(this.generationBestScore, this.snakeGame.score)
+
+            genome.fitness = this.snakeGame.getFitness()
+
+            if (this.snakeGame.score > this.allTimeBestScore) {
+                this.bestGenome = genome
+                this.allTimeBestScore = this.snakeGame.score
+            }
+
+            if (genome.fitness > this.fittestGenome.fitness) {
+                this.fittestGenome = genome
+            }
+
+            // genome.species.addFitness(genome.fitness)
+        }
+
+        // if (this.genomeIndex >= 0.5 * this.population.genomes.length) {
+        //     this.averageScorePerGeneration[this.averageScorePerGeneration.length - 1] = this.generationInfo.averageScore
+        //     this.bestScorePerGeneration[this.bestScorePerGeneration.length - 1] = this.generationInfo.bestScore
+        // }
+
+        // this.allTimeBestScore = Math.max(this.allTimeBestScore, this.generationInfo.bestScore)
+    }
+
+    drawFrame(context) {
+        context.fillStyle = GAME_BACKGROUND_COLOUR
+        context.fillRect(0, 0, context.canvas.width, context.canvas.height)
+
+        drawGraph(context, this.bestScorePerGeneration, this.allTimeBestScore, "#FFA500")
+        drawGraph(context, this.averageScorePerGeneration, this.allTimeBestScore, SNAKE_COLOUR)
+
+        context.fillStyle = GAME_TEXT_COLOUR
+        context.font = "36px serif"
+        context.fillText(`Generation #${this.population.generationCount} | Generation best score: ${this.prevGenerationInfo.bestScore} | All time high score: ${this.allTimeBestScore} | Population count: ${this.population.populationCount} | Avg neuron count: ${Math.round(this.prevGenerationInfo.averageNeuronCount)} | Species Count: ${this.population.species.length}`, 0, context.canvas.height - 9, context.canvas.width)
     }
 
     startSimulation(context) {
+        const loop = () => {
+            this.requestId = requestAnimationFrame(loop)
+            canvas.width = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth
+            canvas.height = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight
+            this.drawFrame(context)
+
+            // context.fillStyle = "#FFA500"
+            // context.fillRect(0, context.canvas.height - 50, context.canvas.width * (this.genomeIndex / this.population.genomes.length), 5)
+
+            if (this.isGenerationDone()) {
+                this.nextGeneration()
+            }
+
+            this.graduallyProcessGeneration(MAX_MILLISECONDS_PER_FRAME)
+            // this.graduallyProcessGeneration(Math.max(1.0, MAX_MILLISECONDS_PER_FRAME - Date.now() + timestamp))
+            // this.graduallyProcessGeneration(1)
+            // this.drawFrame(context)
+
+            if (this.population.generationCount >= this.totalGenerationCount) {
+                cancelAnimationFrame(this.requestId)
+            }
+        }
+
+        loop()
+    }
+
+    _startSimulation(context) {
         context.canvas.addEventListener("resize", ({ target: canvas }) => {
             canvas.width = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth
             canvas.height = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight
@@ -962,64 +1147,64 @@ class GraphSimulation {
             context.canvas.width = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth
             context.canvas.height = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight
 
-            let totalFitness = 0
-            let totalScore = 0
-            let currentBestScore = 0
-            this.population.processGeneration((genome) => {
-                this.averageNeuronCount += genome.neuronGenes.length
+            // let totalScore = 0
+            // this.generationBestScore = 0
+            // this.generationTotalNeuronCount = 0
+            // this.population.processGeneration((genome) => {
+            //     this.generationTotalNeuronCount += genome.neuronGenes.length
 
+            //     this.snakeGame.reset()
+            //     this.snakeGame.neuralNetwork = genome.toNeuralNetwork()
+
+            //     while (this.snakeGame.state != SNAKE_GAME_STATE_GAME_OVER && this.snakeGame.ticksSinceLastTarget < LASTING_SPACES_UNTIL_GAMEOVER) {
+            //         this.snakeGame.update()
+            //     }
+
+            //     totalScore += this.snakeGame.score
+
+            //     const fitness = this.snakeGame.getFitness()
+
+            //     this.generationBestScore = Math.max(this.generationBestScore, this.snakeGame.score)
+            //     if (this.snakeGame.score > this.allTimeBestScore) {
+            //         this.allTimeBestScore = this.snakeGame.score
+            //     }
+
+            //     if (fitness > this.bestGenome.fitness) {
+            //         this.bestGenome = genome
+            //     }
+
+            //     return fitness
+            // })
+
+            this.population.evaluate((genome) => {
                 this.snakeGame.reset()
                 this.snakeGame.neuralNetwork = genome.toNeuralNetwork()
 
-                while (this.snakeGame.state != SNAKE_GAME_STATE_GAME_OVER && this.snakeGame.ticksSinceLastTarget < LASTING_SPACES_UNTIL_GAMEOVER) {
+                while (this.snakeGame.state != SNAKE_GAME_STATE_GAME_OVER
+                &&     this.snakeGame.ticksSinceLastTarget < LASTING_SPACES_UNTIL_GAMEOVER
+                &&     this.snakeGame.snake.body.length < this.snakeGame.cols * this.snakeGame.rows) {
                     this.snakeGame.update()
                 }
 
-                totalScore += this.snakeGame.score
+                this.generationInfo.record(genome, this.snakeGame)
 
-                const fitness = this.snakeGame.getFitness()
-
-                totalFitness += fitness
-
-                currentBestScore = Math.max(currentBestScore, this.snakeGame.score)
-                if (this.snakeGame.score > this.bestScore) {
-                    this.bestScore = this.snakeGame.score
-
-                    // if (fitness <= this.bestGenome.fitness) {
-                    //     throw new Error("Bad fitness function!")
-                    // }
+                genome.fitness = this.snakeGame.getFitness()
+                if (genome.fitness > this.fittestGenome.fitness) {
+                    this.fittestGenome = genome
                 }
 
-                if (fitness > this.bestGenome.fitness) {
-                    this.bestGenome = genome
-                }
-
-                return fitness
+                return genome.fitness
             })
 
-            const averageScore = totalScore / this.population.genomes.length
-            const averageFitness = totalFitness / this.population.genomes.length
-            this.averageNeuronCount = Math.floor(this.averageNeuronCount / this.population.genomes.length)
+            // const averageScore = totalScore / this.population.genomes.length
+            // this.averageNeuronCount = Math.floor(this.generationTotalNeuronCount / this.population.populationCount)
 
-            this.bestScore = Math.max(this.bestScore, currentBestScore)
-            this.bestAverageScore = Math.max(this.bestAverageScore, averageScore)
+            this.nextGeneration()
 
-            this.averageScorePerGeneration.push(averageScore)
-            this.bestScorePerGeneration.push(currentBestScore)
-            this.fitnessPerGeneration.push(averageFitness)
+            // this.averageScorePerGeneration.push(averageScore)
+            // this.bestScorePerGeneration.push(this.generationBestScore)
 
-            context.fillStyle = GAME_BACKGROUND_COLOUR
-            context.fillRect(0, 0, context.canvas.width, context.canvas.height)
-
-            const highest = Math.max.apply(Math, this.fitnessPerGeneration)
-
-            drawGraph(context, this.bestScorePerGeneration, this.bestScore, "#FFA500")
-            drawGraph(context, this.averageScorePerGeneration, this.bestScore, SNAKE_COLOUR)
-            // drawGraph(context, this.fitnessPerGeneration, highest, "#96d9c0")
-
-            context.fillStyle = GAME_TEXT_COLOUR
-            context.font = "36px serif"
-            context.fillText(`Generation #${this.population.generationCount} | Generation best score: ${currentBestScore} | All time high score: ${this.bestScore} | Population count: ${this.population.populationCount} | Avg neuron count: ${this.averageNeuronCount} | Species Count: ${this.population.species.length}`, 0, context.canvas.height - 9, context.canvas.width)
+            this.drawFrame(context)
 
             if (this.population.generationCount >= this.totalGenerationCount) {
                 cancelAnimationFrame(this.requestId)
@@ -1030,9 +1215,159 @@ class GraphSimulation {
     }
 }
 
+class SimulationUsingPopulation {
+    constructor (
+        context = null,
+        population = null,
+        generationCount = 2500,
+    ) {
+        this.context = context
+        this.canvas = context.canvas
+        this.population = population
+        this.totalGenerationCount = generationCount
+
+        this.bestGenome = this.population.genomes[0]
+        this.fittestGenome = this.population.genomes[0]
+        this.prevGenerationInfo = new GenerationStatistics()
+        this.generationInfo = new GenerationStatistics()
+
+        // this.averageScore += game.score
+        // this.totalNeuronCount += genome.neuronGenes.length
+        // this.bestScore = Math.max(this.bestScore, game.score)
+        this.allTimeBestScore = 0
+
+        // this.snakeGameSize = 20
+        this.snakeGameSize = 13
+
+        this.frameRate = 60
+        this.updatesPerFrame = 1
+
+        this.requestId = null
+
+        this.population.specifyGenomes()
+        this.snakeGames = this.population.genomes.map(e => new SnakeGame(this.snakeGameSize, this.snakeGameSize, e, e.toNeuralNetwork()))
+
+        window.addEventListener("resize", this.resizeCanvas.bind(this), false)
+        this.resizeCanvas()
+    }
+
+    startGeneration() {
+        this.population.repopulate()
+        this.population.specifyGenomes()
+        this.prevGenerationInfo.copy(this.generationInfo)
+        this.generationInfo.reset()
+
+        this.snakeGames = this.population.genomes.map(e => new SnakeGame(this.snakeGameSize, this.snakeGameSize, e, e.toNeuralNetwork()))
+    }
+
+    resizeCanvas() {
+        this.canvas.width = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth
+        this.canvas.height = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight
+        this.rectangleViews = this.getRectangleViews()
+        this.render()
+    }
+
+    getRectangleViews() {
+        const usableHeight = this.canvas.height - 100
+        const rectangleViews = []
+        rectangleViews.push(new Rectangle(0, 0, usableHeight / 1.1, usableHeight))
+
+        const remainingWidth = this.canvas.width - rectangleViews[0].width
+
+        if (remainingWidth < 200) {
+            return rectangleViews
+        }
+
+        const gameWindowWidth = remainingWidth / 12
+        const gameWindowHeight = gameWindowWidth * 1.1
+
+        const windowColumns = Math.floor(remainingWidth / gameWindowWidth)
+        const windowRows = Math.floor(usableHeight / gameWindowHeight)
+
+        for (let idx0 = 0, x = rectangleViews[0].width; idx0 < windowColumns; ++idx0, x += gameWindowWidth) {
+            for (let idx1 = 0, y = 0; idx1 < windowRows; ++idx1, y += gameWindowHeight) {
+                rectangleViews.push(new Rectangle(x, y, gameWindowWidth, gameWindowHeight))
+            }
+        }
+
+        return rectangleViews
+    }
+
+    gameLoop() {
+        this.requestId = window.setTimeout(this.gameLoop.bind(this), 1000 / this.frameRate)
+
+        for (let idx = 0; idx < this.updatesPerFrame; ++idx) {
+            this.update()
+        }
+
+        this.render()
+    }
+    
+    render() {
+        this.context.fillStyle = GAME_BACKGROUND_COLOUR
+        this.context.fillRect(0, 0, this.context.canvas.width, this.context.canvas.height)
+
+        for (let idx0 = 0; idx0 < this.rectangleViews.length && idx0 < this.snakeGames.length; ++idx0) {
+            this.snakeGames[idx0].render(this.context, this.rectangleViews[idx0])
+        }
+
+        this.context.fillStyle = GAME_TEXT_COLOUR
+        this.context.textAlign = "start"
+        this.context.font = "36px serif"
+        this.context.fillText(`Generation #${this.population.generationCount} | Generation best score: ${this.generationInfo.bestScore} | All time high score: ${this.allTimeBestScore} | Population count: ${this.population.populationCount} | Avg neuron count: ${Math.round(this.generationInfo.averageNeuronCount)} | Species Count: ${this.population.species.length}`, 0, this.context.canvas.height - 9, this.context.canvas.width)
+    }
+
+    update() {
+        let shouldRestart = false
+        for (let idx = 0; idx < this.snakeGames.length; ++idx) {
+            const snakeGame = this.snakeGames[idx]
+
+            snakeGame.update()
+            this.generationInfo.record(snakeGame.genome, snakeGame)
+
+            if (snakeGame.ticksSinceLastTarget > LASTING_SPACES_UNTIL_GAMEOVER) {
+                snakeGame.state = SNAKE_GAME_STATE_GAME_OVER
+            }
+
+            if (snakeGame.state != SNAKE_GAME_STATE_GAME_OVER) {
+                shouldRestart = true
+            }
+
+            snakeGame.genome.fitness = snakeGame.getFitness()
+
+            if (snakeGame.score > this.allTimeBestScore) {
+                this.bestGenome = snakeGame.genome
+                this.allTimeBestScore = snakeGame.score
+            }
+
+            if (snakeGame.genome.fitness > this.fittestGenome.fitness) {
+                this.fittestGenome = snakeGame.genome
+            }
+        }
+
+        if (!shouldRestart) {
+            this.startGeneration()
+        }
+
+        this.snakeGames.sort((snakeGame0, snakeGame1) => {
+            const snakeGameActive0 = snakeGame0.state != SNAKE_GAME_STATE_GAME_OVER
+            const snakeGameActive1 = snakeGame1.state != SNAKE_GAME_STATE_GAME_OVER
+            if (snakeGameActive0 != snakeGameActive1) {
+                return snakeGameActive0 ? -1 : 1
+            }
+
+            return snakeGame1.getFitness() - snakeGame0.getFitness()
+        })
+    }
+}
+
 let simulation
 
 function drawGraph(context, data, highestValue, color = GAME_GRID_LINE_COLOUR) {
+    if (!data || data.length == 0) {
+        return
+    }
+
     context.strokeStyle = color
     context.lineWidth = 1
     context.lineCap = "round"
@@ -1078,41 +1413,95 @@ function drawGraph(context, data, highestValue, color = GAME_GRID_LINE_COLOUR) {
 
     context.fillStyle = color
     context.font = "36px serif"
+    context.textAlign = "start"
     context.fillText(data[data.length - 1].toString(), prevX, prevY + 18)
 }
 
 function main0() {
     const canvas = document.getElementById("canvas")
     const context = canvas.getContext("2d")
-    simulation = new Simulation(context)
+
+    const config = new Configuration({
+        excessGeneCoefficient: 5.0,
+        disjointGeneCoefficient: 5.0,
+        weightDifferenceCoefficient: 2.5,
+        compatibilityThreshold: 3.5,
+
+        mutateAddConnectionRate: 0.10,
+        mutateRemoveConnectionRate: 0.10,
+        mutateAddNeuronRate: 0.10,
+        mutateRemoveNeuronRate: 0.10,
+        mutateChangeWeightRate: 0.50,
+        mutateSetWeightRate: 0.25,
+        randomWeightRange: 2.0,
+        changeWeightRange: 2.0,
+    })
+
+    const innovationCounter = new InnovationCounter()
+    const startingGenome = Genome.fromTopology(SNAKE_NEURAL_NETWORK_BASE_TOPOLOGY, sigmod, innovationCounter)
+
+    const population = new Population(5000, startingGenome, innovationCounter, config)
+    simulation = new SimulationUsingPopulation(context, population, 2000000)
     simulation.gameLoop()
 }
 
 function main() {
     const canvas = document.getElementById("canvas")
     const context = canvas.getContext("2d")
+    simulation = new Simulation(context)
+    simulation.gameLoop()
+}
+
+function main1() {
+    const canvas = document.getElementById("canvas")
+    const context = canvas.getContext("2d")
+
+    // const config = new Configuration({
+    //     excessGeneCoefficient: 4.0,
+    //     disjointGeneCoefficient: 4.0,
+    //     weightDifferenceCoefficient: 3.0,
+    //     compatibilityThreshold: 4.0,
+
+    //     mutateAddConnectionRate: 0.05,
+    //     mutateRemoveConnectionRate: 0.05,
+    //     mutateAddNeuronRate: 0.05,
+    //     mutateRemoveNeuronRate: 0.05,
+    //     mutateChangeWeightRate: 0.50,
+    //     mutateSetWeightRate: 0.20,
+    //     randomWeightRange: 2.0,
+    //     changeWeightRange: 0.5,
+    // })
+
+    // const config = new Configuration({
+    //     excessGeneCoefficient: 5.0,
+    //     disjointGeneCoefficient: 5.0,
+    //     weightDifferenceCoefficient: 2.5,
+    //     compatibilityThreshold: 3.5,
+
+    //     mutateAddConnectionRate: 0.10,
+    //     mutateRemoveConnectionRate: 0.10,
+    //     mutateAddNeuronRate: 0.10,
+    //     mutateRemoveNeuronRate: 0.10,
+    //     mutateChangeWeightRate: 0.50,
+    //     mutateSetWeightRate: 0.25,
+    //     randomWeightRange: 2.0,
+    //     changeWeightRange: 2.0,
+    // })
+
     const config = new Configuration({
         excessGeneCoefficient: 5.0,
         disjointGeneCoefficient: 5.0,
         weightDifferenceCoefficient: 2.5,
-        compatibilityThreshold: 4.0,
+        compatibilityThreshold: 3.5,
 
-        // mutateAddConnectionRate: 0.05,
-        // mutateRemoveConnectionRate: 0.05,
-        // mutateAddNeuronRate: 0.05,
-        // mutateRemoveNeuronRate: 0.05,
         mutateAddConnectionRate: 0.10,
         mutateRemoveConnectionRate: 0.10,
         mutateAddNeuronRate: 0.10,
         mutateRemoveNeuronRate: 0.10,
-        // mutateAddConnectionRate: 0.50,
-        // mutateRemoveConnectionRate: 0.50,
-        // mutateAddNeuronRate: 0.50,
-        // mutateRemoveNeuronRate: 0.50,
         mutateChangeWeightRate: 0.50,
-        mutateSetWeightRate: 0.25,
+        mutateSetWeightRate: 0.50,
         randomWeightRange: 2.0,
-        changeWeightRange: 1.0,
+        changeWeightRange: 2.0,
     })
 
     const innovationCounter = new InnovationCounter()
@@ -1123,7 +1512,7 @@ function main() {
     //     startingGenome.addNeuronGene(new NeuronGene(innovationCounter.getNeuronId(), sigmod))
     // }
 
-    const population = new Population(500, startingGenome, innovationCounter, config)
+    const population = new Population(1000, startingGenome, innovationCounter, config)
     const snakeGame = new SnakeGame(20, 20)
     simulation = new GraphSimulation(population, snakeGame, 2000000)
     simulation.startSimulation(context)

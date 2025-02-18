@@ -610,6 +610,10 @@ class Species {
         this.leader.species = this
         this.totalFitness = 0
     }
+
+    addFitness(fitness) {
+        this.totalFitness += fitness
+    }
 }
 
 function selectRandomSpeciesFitnessBiased(speciesArray) {
@@ -728,6 +732,8 @@ class Population {
         let newGenomes = []
         for (let idx = 0; idx < this.species.length; ++idx) {
             const species = this.species[idx]
+            species.updateFitness()
+
             newGenomes.push(species.leader.clone())
         }
 

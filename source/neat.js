@@ -1,11 +1,23 @@
 // https://nn.cs.utexas.edu/downloads/papers/stanley.cec02.pdf
 
-const MUTATE_ADD_CONNECTION_RATE = 0.1
-const MUTATE_REMOVE_CONNECTION_RATE = 0.1
-const MUTATE_ADD_NEURON_RATE = 0.1
-const MUTATE_REMOVE_NEURON_RATE = 0.1
-const MUTATE_CHANGE_WEIGHT_RATE = 0.5
-const MUTATE_SET_WEIGHT_RATE = 0.5
+class Configuration {
+    constructor (object = {}) {
+        this.excessGeneCoefficient = object.excessGeneCoefficient ?? 1.0
+        this.disjointGeneCoefficient = object.disjointGeneCoefficient ?? 1.0
+        this.weightDifferenceCoefficient = object.weightDifferenceCoefficient ?? 0.4
+        this.compatibilityThreshold = object.compatibilityThreshold ?? 80.0
+        this.generationCuttoff = object.generationCuttoff ?? 10
+        this.mutateAddConnectionRate = object.mutateAddConnectionRate ?? 0.1
+        this.mutateRemoveConnectionRate = object.mutateRemoveConnectionRate ?? 0.1
+        this.mutateAddNeuronRate = object.mutateAddNeuronRate ?? 0.1
+        this.mutateRemoveNeuronRate = object.mutateRemoveNeuronRate ?? 0.1
+        this.mutateChangeWeightRate = object.mutateChangeWeightRate ?? 0.5
+        this.mutateSetWeightRate = object.mutateSetWeightRate ?? 0.5
+        this.randomWeightRange = object.randomWeightRange ?? 2.0
+        this.changeWeightRange = object.changeWeightRange ?? 2.0
+        this.addConnectionAttepmpts = object.addConnectionAttepmpts ?? 1
+    }
+}
 
 class ConnectionGene {
     static crossover(dominant, recessive) {
@@ -165,7 +177,7 @@ class Genome {
     static crossover(dominant, recessive, innovation) {
         const offspring = new Genome(innovation.getGenomeId(), dominant.inputCount, dominant.outputCount)
 
-        for (const dominantGene of dominant.getNeuronGenes()) {
+        for (const dominantGene of dominant.neuronGenes) {
             const recessiveGene = recessive.findNeuronGene(dominantGene.neuronId)
 
             if (recessiveGene === null || recessiveGene === undefined) {
@@ -176,7 +188,7 @@ class Genome {
             }
         }
 
-        for (const dominantGene of dominant.getConnectionGenes()) {
+        for (const dominantGene of dominant.connectionGenes) {
             const recessiveGene = recessive.findConnectionGene(dominantGene.innovationNumber)
 
             if (recessiveGene === null || recessiveGene === undefined) {
@@ -256,9 +268,6 @@ class Genome {
         return genome
     }
 
-    getNeuronGenes() { return this.neuronGenes }
-    getConnectionGenes() { return this.connectionGenes }
-
     highestConnectionInnovation() {
         let innovation = 0
         for (let idx = 0; idx < this.connectionGenes.length; ++idx) {
@@ -269,12 +278,12 @@ class Genome {
     }
 
     highestNeuronId() {
-        let innovation = 0
+        let neuronId = 0
         for (let idx = 0; idx < this.neuronGenes.length; ++idx) {
-            innovation = Math.max(innovation, this.neuronGenes[idx].neuronId)
+            neuronId = Math.max(neuronId, this.neuronGenes[idx].neuronId)
         }
 
-        return innovation
+        return neuronId
     }
 
     clone() { return this.cloneUsingId(this.genomeId) }
@@ -328,20 +337,18 @@ class Genome {
     }
 
     findConnectionGene(innovationNumber) {
-        // return this.connectionGenes.get(innovationNumber)
         const index = this._innovationNumberToIndex.get(innovationNumber)
         return index != null ? this.connectionGenes[index] : null
     }
 
     findNeuronGene(neuronId) {
-        // return this.neuronGenes.get(neuronId)
         const index = this._neuronIdToIndex.get(neuronId)
         return index != null ? this.neuronGenes[index] : null
     }
 
     connectionMakesCycle(inputNeuronId, outputNeuronId) {
         const connectionGraph = new Map()
-        for (const connectionGene of this.getConnectionGenes()) {
+        for (const connectionGene of this.connectionGenes) {
             const outputNeurons = connectionGraph.get(connectionGene.inputNeuronId) || []
             outputNeurons.push(connectionGene.outputNeuronId)
             connectionGraph.set(connectionGene.inputNeuronId, outputNeurons)
@@ -410,7 +417,7 @@ class Genome {
             }
         }
 
-        const sortedNeuronGenes = this._topologicalSortNeuronGenes(this.getNeuronGenes(), backwardsConnectionGraph)
+        const sortedNeuronGenes = this._topologicalSortNeuronGenes(this.neuronGenes, backwardsConnectionGraph)
         const sortedNeuronIdToIndex = new Map(sortedNeuronGenes.map((neuronGene, idx) => [ neuronGene.neuronId, idx ]))
 
         const neurons = []
@@ -442,24 +449,27 @@ class Genome {
     }
 
     mutateAddConnection(config, innovationCounter) {
-        const inputNeuron  = this.neuronGenes[Math.floor(this.neuronGenes.length * Math.random())]
-        const outputNeuron = this.neuronGenes[Math.floor(this.neuronGenes.length * Math.random())]
+        for (let idx = 0; idx < config.addConnectionAttepmpts; ++idx) {
+            const inputNeuron  = this.neuronGenes[Math.floor(this.neuronGenes.length * Math.random())]
+            const outputNeuron = this.neuronGenes[Math.floor(this.neuronGenes.length * Math.random())]
 
-        const existingConnection = this.connectionGenes.find(e => {
-            return e.inputNeuronId == inputNeuron.neuronId
-            &&     e.outputNeuronId == outputNeuron.neuronId
-        })
+            const existingConnection = this.connectionGenes.find(e => {
+                return e.inputNeuronId == inputNeuron.neuronId
+                &&     e.outputNeuronId == outputNeuron.neuronId
+            })
 
-        if (existingConnection !== null && existingConnection !== undefined) {
-            return
+            if (existingConnection !== null && existingConnection !== undefined) {
+                continue
+            }
+
+            if (this.connectionMakesCycle(inputNeuron.neuronId, outputNeuron.neuronId)) {
+                continue
+            }
+
+            const newConnection = new ConnectionGene(innovationCounter.getInnovationNumber(), inputNeuron.neuronId, outputNeuron.neuronId, config.randomWeightRange * (2 * Math.random() - 1))
+            this.addConnectionGene(newConnection)
+            break
         }
-
-        if (this.connectionMakesCycle(inputNeuron.neuronId, outputNeuron.neuronId)) {
-            return
-        }
-
-        const newConnection = new ConnectionGene(innovationCounter.getInnovationNumber(), inputNeuron.neuronId, outputNeuron.neuronId, config.randomWeightRange * (2 * Math.random() - 1))
-        this.addConnectionGene(newConnection)
     }
 
     mutateRemoveConnection(config) {
@@ -494,9 +504,6 @@ class Genome {
 
         const index = Math.floor(this.neuronGenes.length * Math.random())
         this.removeNeuronGene(this.neuronGenes[index].neuronId)
-
-        // const neuronToRemove = this.neuronGenes[Math.floor(this.neuronGenes.length * Math.random())]
-        // this.removeNeuronGene(neuronToRemove.neuronId)
     }
 
     mutateChangeWeight(config) {
@@ -556,7 +563,6 @@ class Species {
         this.leader = leaderGenome
         this.members = [ leaderGenome ]
         this.leader.species = this
-        this.adjustedFitness = 0
         this.totalFitness = 0
     }
 
@@ -591,17 +597,11 @@ class Species {
 
             this.totalFitness += member.fitness
         }
-
-        // this.adjustedFitness = this.totalFitness / this.members.length
     }
 
     addGenome(genome) {
         genome.species = this
         this.members.push(genome)
-        // this.totalFitness += genome.fitness
-        // if (this.leader.fitness < genome.fitness) {
-        //     this.leader = genome
-        // }
     }
 
     reset(leaderGenome) {
@@ -611,71 +611,20 @@ class Species {
         this.totalFitness = 0
     }
 
-    addFitness(fitness) {
-        this.totalFitness += fitness
-    }
-}
+    selectRandomGenomeFitnessBiased() {
+        let accumulatedFitness = 0
+        const randomFitness = this.totalFitness * Math.random()
+        for (let idx = 0; idx < this.members.length; ++idx) {
+            const genome = this.members[idx]
 
-function selectRandomSpeciesFitnessBiased(speciesArray) {
-    let totalAdjustedFitness = 0
-    for (let idx = 0; idx < speciesArray.length; ++idx) {
-        const species = speciesArray[idx]
-        totalAdjustedFitness += species.totalFitness / species.members.length
-    }
-
-    let accumulatedFitness = 0
-    const randomFitness = totalAdjustedFitness * Math.random()
-    for (let idx = 0; idx < speciesArray.length; ++idx) {
-        const species = speciesArray[idx]
-        accumulatedFitness += species.totalFitness / species.members.length
-
-        if (accumulatedFitness >= randomFitness) {
-            return species
-        }
-    }
-
-    throw new Error(`Selected a species from outside the array bounds! randomFitness: ${randomFitness} totalAdjustedFitness: ${totalAdjustedFitness}`)
-}
-
-function selectRandomGenomeFromSpeciesFitnessBiased(species) {
-    // let totalFitness = 0
-    // for (let idx = 0; idx < species.members.length; ++idx) {
-    //     totalFitness += species.members[idx].fitness
-    // }
-
-    let accumulatedFitness = 0
-    const randomFitness = species.totalFitness * Math.random()
-    for (let idx = 0; idx < species.members.length; ++idx) {
-        const genome = species.members[idx]
-
-        accumulatedFitness += genome.fitness
-        if (accumulatedFitness >= randomFitness) {
-            return genome
-        }
-
-    }
-
-    throw new Error(`Selected a genome from outside the array bounds! randomFitness: ${randomFitness} totalFitness: ${species.totalFitness}`)
-}
-
-function groupGenomesIntoSpecies(genomes, config) {
-    const speciesArray = []
-
-    loop: for (let idx0 = 0; idx0 < genomes.length; ++idx0) {
-        const genome = genomes[idx0]
-        for (let idx1 = 0; idx1 < speciesArray.length; ++idx1) {
-            const species = speciesArray[idx1]
-
-            if (Genome.compatibilityDistance(species.leader, genome, config) < this.config.compatibilityThreshold) {
-                species.addGenome(genome)
-                continue loop
+            accumulatedFitness += genome.fitness
+            if (accumulatedFitness >= randomFitness) {
+                return genome
             }
         }
 
-        speciesArray.push(new Species(genome))
+        throw new Error(`Selected a genome from outside the array bounds! randomFitness: ${randomFitness} totalFitness: ${species.totalFitness}`)
     }
-
-    return speciesArray
 }
 
 class Population {
@@ -690,9 +639,33 @@ class Population {
 
         while (this.genomes.length < this.populationCount) {
             const genomeId = this.innovationCounter.getGenomeId()
-            this.genomes.push(this.startingGenome.cloneUsingId(genomeId).randomizeWeights(config))
-            // this.genomes.push(this.startingGenome.cloneUsingId(genomeId).mutate(innovationCounter, config))
+            const genome = this.startingGenome.cloneUsingId(genomeId).randomizeWeights(config)
+            // const genome = this.startingGenome.cloneUsingId(genomeId).mutate(innovationCounter, config)
+            this.genomes.push(genome)
         }
+
+        this.specifyGenomes()
+    }
+
+    selectRandomSpeciesFitnessBiased() {
+        let totalAdjustedFitness = 0
+        for (let idx = 0; idx < this.species.length; ++idx) {
+            const species = this.species[idx]
+            totalAdjustedFitness += species.totalFitness / species.members.length
+        }
+
+        let accumulatedFitness = 0
+        const randomFitness = totalAdjustedFitness * Math.random()
+        for (let idx = 0; idx < this.species.length; ++idx) {
+            const species = this.species[idx]
+            accumulatedFitness += species.totalFitness / species.members.length
+
+            if (accumulatedFitness >= randomFitness) {
+                return species
+            }
+        }
+
+        throw new Error(`Selected a species from outside the array bounds! randomFitness: ${randomFitness} totalAdjustedFitness: ${totalAdjustedFitness}`)
     }
 
     specifyGenomes() {
@@ -738,13 +711,13 @@ class Population {
         }
 
         while (newGenomes.length < this.populationCount) {
-            const species   = selectRandomSpeciesFitnessBiased(this.species)
-            const genome0   = selectRandomGenomeFromSpeciesFitnessBiased(species)
-            const genome1   = selectRandomGenomeFromSpeciesFitnessBiased(species)
+            const species   = this.selectRandomSpeciesFitnessBiased()
+            const genome0   = species.selectRandomGenomeFitnessBiased()
+            const genome1   = species.selectRandomGenomeFitnessBiased()
             const dominant  = genome0.fitness > genome1.fitness ? genome0 : genome1
             const recessive = genome0.fitness > genome1.fitness ? genome1 : genome0
-            const newGenome = Genome.crossover(dominant, recessive, this.innovationCounter).mutate(this.innovationCounter, this.config)
-            newGenomes.push(newGenome)
+            const newGenome = Genome.crossover(dominant, recessive, this.innovationCounter)
+            newGenomes.push(newGenome.mutate(this.innovationCounter, this.config))
         }
 
         this.genomes = newGenomes
@@ -770,28 +743,9 @@ class Population {
 
     processGeneration(callback) {
         this.specifyGenomes()
-        // callback(this)
         this.evaluate(callback)
         this.repopulate()
         return this
-    }
-}
-
-class Configuration {
-    constructor (object = {}) {
-        this.excessGeneCoefficient = object.excessGeneCoefficient ?? 1.0
-        this.disjointGeneCoefficient = object.disjointGeneCoefficient ?? 1.0
-        this.weightDifferenceCoefficient = object.weightDifferenceCoefficient ?? 0.4
-        this.compatibilityThreshold = object.compatibilityThreshold ?? 80.0
-        this.generationCuttoff = object.generationCuttoff ?? 10
-        this.mutateAddConnectionRate = object.mutateAddConnectionRate ?? 0.1
-        this.mutateRemoveConnectionRate = object.mutateRemoveConnectionRate ?? 0.1
-        this.mutateAddNeuronRate = object.mutateAddNeuronRate ?? 0.1
-        this.mutateRemoveNeuronRate = object.mutateRemoveNeuronRate ?? 0.1
-        this.mutateChangeWeightRate = object.mutateChangeWeightRate ?? 0.5
-        this.mutateSetWeightRate = object.mutateSetWeightRate ?? 0.5
-        this.randomWeightRange = object.randomWeightRange ?? 2.0
-        this.changeWeightRange = object.changeWeightRange ?? 2.0
     }
 }
 

@@ -738,6 +738,9 @@ class NeuralNetwork {
         this.inputCount = inputCount
         this.outputCount = outputCount
         this.neurons = neurons
+
+        this.outputNeurons = this.neurons.slice(this.neurons.length - outputCount);
+        this.inputNeurons = this.neurons.slice(0, inputCount);
     }
 
     process(values) {
@@ -765,11 +768,6 @@ class NeuralNetwork {
             currentNeuron.value = currentNeuron.activation(currentNeuron.value)
         }
 
-        const outputValues = []
-        for (let idx = this.neurons.length - this.outputCount; idx < this.neurons.length; ++idx) {
-            outputValues.push(this.neurons[idx].value)
-        }
-
-        return outputValues
+        return this.outputNeurons
     }
 }

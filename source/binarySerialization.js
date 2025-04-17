@@ -108,7 +108,7 @@ class BinaryDeserializer {
         this.#data = data
         this.#bytes = new Uint8Array(data)
         this.#dataView = new DataView(this.#bytes.buffer)
-        this.#decoder = new TextDecoder()
+        this.#decoder = new TextDecoder("utf-8")
         this.#offset = 0
     }
 

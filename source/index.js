@@ -34,7 +34,7 @@ const config = new Configuration({
     excessGeneCoefficient: 5.0,
     disjointGeneCoefficient: 5.0,
     weightDifferenceCoefficient: 2.5,
-    compatibilityThreshold: 3.5,
+    compatibilityThreshold: 3.0,
 
     mutateAddConnectionRate: 0.10,
     mutateRemoveConnectionRate: 0.10,
@@ -42,9 +42,8 @@ const config = new Configuration({
     mutateRemoveNeuronRate: 0.10,
     mutateChangeWeightRate: 0.00,
     mutateSetWeightRate: 0.00,
-    mutateWeightsGaussianRate: 0.05,
+    mutateWeightsGaussianRate: 0.08,
     mutateWeightsUniformRate: 0.00,
-    mutationProbability: 0.05,
     randomWeightRange: 1.0,
     changeWeightRange: 1.0,
     addConnectionAttepmpts: 1,
@@ -588,12 +587,12 @@ class GraphSimulation {
         drawLineGraph(context, this.bestScorePerGeneration, position, scale, GRAPH_SCORE_COLOR)
         drawLineGraph(context, this.averageScorePerGeneration, position, scale, SNAKE_COLOUR)
 
-        const generationNumber = this.population.generationCount + 1;
-        const bestScore = this.prevGenerationInfo.bestScore;
-        const highScore = this.allTimeGenerationInfo.bestScore;
-        const populationCount = this.population.populationCount;
-        const avgNeuronCount = Math.round(this.prevGenerationInfo.averageNeuronCount);
-        const speciesCount = this.population.species.length;
+        const generationNumber = this.population.generationCount + 1
+        const bestScore = this.prevGenerationInfo.bestScore
+        const highScore = this.allTimeGenerationInfo.bestScore
+        const populationCount = this.population.populationCount
+        const avgNeuronCount = Math.round(this.prevGenerationInfo.averageNeuronCount)
+        const speciesCount = this.population.species.length
 
         context.fillStyle = GAME_TEXT_COLOUR
         context.font = "36px serif"
@@ -605,7 +604,7 @@ class GraphSimulation {
             position.x,
             position.y + size.y - 9,
             size.x
-        );
+        )
     }
 
     update() {
@@ -865,15 +864,40 @@ function drawLineGraph(context, data, position, scale, color = GAME_GRID_LINE_CO
 }
 
 function main() {
+    
+    // Example usage:
+    // Add an input element to the HTML: <input type="file" id="fileInput" />
+    document.getElementById("fileInput").addEventListener("input", (event) => {
+        const file = event.target.files[0]
+        if (!file) {
+            console.error("No file selected.")
+            return
+        }
+
+        const reader = new FileReader()
+        reader.onload = function (e) {
+            try {
+                const data = new Uint8Array(e.target.result)
+                const population = Population.deserialize(new BinaryDeserializer(data))
+                simulation = new GraphSimulation(population, snakeGame, Infinity)
+                console.log("Population loaded successfully.")
+            } catch (error) {
+                console.error("Failed to load population:", error)
+            }
+        }
+
+        reader.readAsArrayBuffer(file)
+    })
+
     const canvas = document.getElementById("canvas")
     const context = canvas.getContext("2d")
 
     const innovationCounter = new InnovationCounter()
     const startingGenome = Genome.fromTopology(SNAKE_NEURAL_NETWORK_BASE_TOPOLOGY, sigmod, innovationCounter)
 
-    const population = new Population(1000, startingGenome, innovationCounter, config)
+    const population = new Population(500, startingGenome, innovationCounter, config)
 
-    const snakeGame = new SnakeGame(10, 10)
+    const snakeGame = new SnakeGame(40, 40)
     simulation = new GraphSimulation(population, snakeGame, Infinity)
 
     let requestId = null
@@ -899,14 +923,14 @@ function main() {
 }
 
 function savePopulationToFile(population, filename = "population.bin") {
-    const serializedData = population.serialize().bytes();
-    const blob = new Blob([new Uint8Array(serializedData)], { type: "application/octet-stream" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const serializedData = population.serialize().bytes()
+    const blob = new Blob([serializedData], { type: "application/octet-stream" })
+    const link = document.createElement("a")
+    link.href = URL.createObjectURL(blob)
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
 }
 
 window.addEventListener("load", main, false)

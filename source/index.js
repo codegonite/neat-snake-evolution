@@ -36,15 +36,15 @@ const config = new Configuration({
     weightDifferenceCoefficient: 2.5,
     compatibilityThreshold: 3.0,
 
-    mutateAddConnectionRate: 0.10,
-    mutateRemoveConnectionRate: 0.10,
-    mutateAddNeuronRate: 0.10,
-    mutateRemoveNeuronRate: 0.10,
-    mutateChangeWeightRate: 0.00,
-    mutateSetWeightRate: 0.00,
-    mutateWeightsGaussianRate: 0.08,
-    mutateWeightsUniformRate: 0.00,
-    randomWeightRange: 1.0,
+    addConnectionMutationRate: 0.10,
+    removeConnectionMutationRate: 0.10,
+    addNeuronMutationRate: 0.10,
+    removeNeuronMutationRate: 0.10,
+    // changeWeightMutationRate: 0.00,
+    // setWeightMutationRate: 0.00,
+    weightGaussianMutationRate: 0.08,
+    weightUniformMutationRate: 0.00,
+    randomWeightRange: 1.5,
     changeWeightRange: 1.0,
     addConnectionAttepmpts: 1,
     activations: [ sigmod ],
@@ -876,14 +876,11 @@ function main() {
 
         const reader = new FileReader()
         reader.onload = function (e) {
-            try {
-                const data = new Uint8Array(e.target.result)
-                const population = Population.deserialize(new BinaryDeserializer(data))
-                simulation = new GraphSimulation(population, snakeGame, Infinity)
-                console.log("Population loaded successfully.")
-            } catch (error) {
-                console.error("Failed to load population:", error)
-            }
+            const data = new Uint8Array(e.target.result)
+            const deserializer = new BinaryDeserializer(data)
+            const population = Population.deserialize(deserializer)
+            simulation = new GraphSimulation(population, snakeGame, Infinity)
+            console.log("Population loaded successfully.")
         }
 
         reader.readAsArrayBuffer(file)
@@ -897,15 +894,15 @@ function main() {
 
     const population = new Population(500, startingGenome, innovationCounter, config)
 
-    const snakeGame = new SnakeGame(40, 40)
+    const snakeGame = new SnakeGame(10, 10)
     simulation = new GraphSimulation(population, snakeGame, Infinity)
 
     let requestId = null
     const loop = () => {
         requestId = requestAnimationFrame(loop)
 
-        canvas.width = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth
-        canvas.height = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight
+        // canvas.width = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth
+        // canvas.height = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight
         simulation.render(context)
 
         if (simulation.genomeIndex >= simulation.population.populationCount) {
@@ -923,8 +920,10 @@ function main() {
 }
 
 function savePopulationToFile(population, filename = "population.bin") {
-    const serializedData = population.serialize().bytes()
-    const blob = new Blob([serializedData], { type: "application/octet-stream" })
+    const serializer = new BinarySerializer([])
+    population.serialize(serializer)
+
+    const blob = new Blob([ serializer.bytes() ], { type: "application/octet-stream" })
     const link = document.createElement("a")
     link.href = URL.createObjectURL(blob)
     link.download = filename

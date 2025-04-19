@@ -92,6 +92,14 @@ class BinarySerializer {
         this.#data.push.apply(this.#data, buffer)
     }
 
+    align(alignment, value = 0) {
+        const remaining = this.#data.length % alignment
+        const padding = remaining == 0 ? 0 : alignment - remaining
+        for (let idx = 0; idx < padding; ++idx) {
+            this.#data.push(value)
+        }
+    }
+
     data() { return this.#data }
     bytes() { return new Uint8Array(this.#data) }
     arrayBuffer() { return new Uint8Array(this.#data).buffer }

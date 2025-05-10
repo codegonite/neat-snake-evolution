@@ -40,11 +40,9 @@ const config = new Configuration({
     removeConnectionMutationRate: 0.10,
     addNeuronMutationRate: 0.10,
     removeNeuronMutationRate: 0.10,
-    // changeWeightMutationRate: 0.00,
-    // setWeightMutationRate: 0.00,
     weightGaussianMutationRate: 0.08,
     weightUniformMutationRate: 0.00,
-    randomWeightRange: 1.5,
+    randomWeightRange: 1.0,
     changeWeightRange: 1.0,
     addConnectionAttepmpts: 1,
     activations: [ sigmod ],
@@ -864,9 +862,6 @@ function drawLineGraph(context, data, position, scale, color = GAME_GRID_LINE_CO
 }
 
 function main() {
-    
-    // Example usage:
-    // Add an input element to the HTML: <input type="file" id="fileInput" />
     document.getElementById("fileInput").addEventListener("input", (event) => {
         const file = event.target.files[0]
         if (!file) {
@@ -877,8 +872,7 @@ function main() {
         const reader = new FileReader()
         reader.onload = function (e) {
             const data = new Uint8Array(e.target.result)
-            const deserializer = new BinaryDeserializer(data)
-            const population = Population.deserialize(deserializer)
+            const population = readPopulationFile(data)
             simulation = new GraphSimulation(population, snakeGame, Infinity)
             console.log("Population loaded successfully.")
         }
@@ -919,11 +913,7 @@ function main() {
     loop()
 }
 
-function savePopulationToFile(population, filename = "population.bin") {
-    const serializer = new BinarySerializer([])
-    population.serialize(serializer)
-
-    const blob = new Blob([ serializer.bytes() ], { type: "application/octet-stream" })
+function saveBlobToFile(blob, filename) {
     const link = document.createElement("a")
     link.href = URL.createObjectURL(blob)
     link.download = filename
@@ -962,3 +952,14 @@ const ORTHOGONAL_DIRECTIONS = [
 ]
 
 const DEFAULT_POPULATION_STATISTICS = new PopulationStatistics()
+
+const serializer = new BinarySerializer()
+
+const innovationCounter = new InnovationCounter()
+const genome = Genome.fromTopology(SNAKE_NEURAL_NETWORK_BASE_TOPOLOGY, sigmod, innovationCounter)
+const population = new Population(500, genome, innovationCounter, config)
+
+population.serialize(serializer)
+console.log(serializer.bytes())
+console.log(population)
+console.log(Population.deserialize(new BinaryDeserializer(serializer.bytes())))

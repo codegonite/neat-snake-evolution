@@ -81,7 +81,7 @@ class BinarySerializer {
         this.#data.push.apply(this.#data, this.#tempBytes)
     }
 
-    writeUnsignedBytes(bytes) {
+    writeBytes(bytes) {
         for (const byte of bytes) {
             this.writeUint8(byte)
         }
@@ -92,13 +92,13 @@ class BinarySerializer {
         this.#data.push.apply(this.#data, buffer)
     }
 
-    align(alignment, value = 0) {
-        const remaining = this.#data.length % alignment
-        const padding = remaining == 0 ? 0 : alignment - remaining
-        for (let idx = 0; idx < padding; ++idx) {
-            this.#data.push(value)
-        }
-    }
+    // align(alignment, value = 0) {
+    //     const remaining = this.#data.length % alignment
+    //     const padding = remaining == 0 ? 0 : alignment - remaining
+    //     for (let idx = 0; idx < padding; ++idx) {
+    //         this.#data.push(value)
+    //     }
+    // }
 
     data() { return this.#data }
     bytes() { return new Uint8Array(this.#data) }

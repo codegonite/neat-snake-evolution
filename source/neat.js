@@ -6,6 +6,8 @@ const POPULATION_FILE_VERSION0  = 0x00000000
 const POPULATION_FILE_VERSION1  = 0x00000001
 const POPULATION_FILE_HIGHEST_VERSION = POPULATION_FILE_VERSION1
 
+const GENOME_FILE_SIGNATURE = "GENOME  "
+
 function clamped(x) {
     return Math.max(Math.min(x, 1), 0)
 }
@@ -67,6 +69,21 @@ function getActivationFunction(name) {
     throw new Error(`Activation "${name}" doesn't exist!`)
 }
 
+function serializeActivation(serializer, activation) {
+    if (activation.name.length > 0xFF) {
+        throw new Error("Activation function name is too long and can not serialized!")
+    }
+
+    serializer.writeUint8(activation.name.length)
+    serializer.writeStringUTF8(activation.name)
+}
+
+function deserializeActivation(deserializer) {
+    const length = deserializer.readUint8()
+    const activationName = deserializer.readStringUTF8(length)
+    return getActivationFunction(activationName)
+}
+
 class Configuration {
     constructor ({
         excessGeneCoefficient = 1.0,
@@ -77,8 +94,6 @@ class Configuration {
         removeConnectionMutationRate = 0.1,
         addNeuronMutationRate = 0.1,
         removeNeuronMutationRate = 0.1,
-        changeWeightMutationRate = 0.5,
-        setWeightMutationRate = 0.5,
         weightGaussianMutationRate = 0.1,
         weightUniformMutationRate = 0.1,
         addConnectionAttepmpts = 1,
@@ -94,8 +109,6 @@ class Configuration {
         this.removeConnectionMutationRate = removeConnectionMutationRate
         this.addNeuronMutationRate = addNeuronMutationRate
         this.removeNeuronMutationRate = removeNeuronMutationRate
-        this.changeWeightMutationRate = changeWeightMutationRate
-        this.setWeightMutationRate = setWeightMutationRate
         this.weightGaussianMutationRate = weightGaussianMutationRate
         this.weightUniformMutationRate = weightUniformMutationRate
         this.randomWeightRange = randomWeightRange
@@ -104,7 +117,7 @@ class Configuration {
         this.activations = activations
     }
 
-    static deserialize(deserializer, version) {
+    static deserialize(deserializer) {
         const options = {
             excessGeneCoefficient: deserializer.readFloat64LE(),
             disjointGeneCoefficient: deserializer.readFloat64LE(),
@@ -114,8 +127,6 @@ class Configuration {
             removeConnectionMutationRate: deserializer.readFloat64LE(),
             addNeuronMutationRate: deserializer.readFloat64LE(),
             removeNeuronMutationRate: deserializer.readFloat64LE(),
-            changeWeightMutationRate: deserializer.readFloat64LE(),
-            setWeightMutationRate: deserializer.readFloat64LE(),
             weightGaussianMutationRate: deserializer.readFloat64LE(),
             weightUniformMutationRate: deserializer.readFloat64LE(),
             randomWeightRange: deserializer.readFloat64LE(),
@@ -126,16 +137,13 @@ class Configuration {
 
         const activationsCount = deserializer.readUint32LE()
         for (let idx = 0; idx < activationsCount; ++idx) {
-            const length = deserializer.readUint32LE()
-            const activationName = deserializer.readStringUTF8(length)
-            const activation = getActivationFunction(activationName)
-            options.activations.push(activation)
+            options.activations.push(deserializeActivation(deserializer))
         }
 
         return new Configuration(options)
     }
 
-    serialize(serializer, version) {
+    serialize(serializer) {
         serializer.writeFloat64LE(this.excessGeneCoefficient)
         serializer.writeFloat64LE(this.disjointGeneCoefficient)
         serializer.writeFloat64LE(this.weightDifferenceCoefficient)
@@ -144,8 +152,6 @@ class Configuration {
         serializer.writeFloat64LE(this.removeConnectionMutationRate)
         serializer.writeFloat64LE(this.addNeuronMutationRate)
         serializer.writeFloat64LE(this.removeNeuronMutationRate)
-        serializer.writeFloat64LE(this.changeWeightMutationRate)
-        serializer.writeFloat64LE(this.setWeightMutationRate)
         serializer.writeFloat64LE(this.weightGaussianMutationRate)
         serializer.writeFloat64LE(this.weightUniformMutationRate)
         serializer.writeFloat64LE(this.randomWeightRange)
@@ -154,9 +160,7 @@ class Configuration {
 
         serializer.writeUint32LE(this.activations.length)
         for (let idx = 0; idx < this.activations.length; ++idx) {
-            const activationName = this.activations[idx].name;
-            serializer.writeUint32LE(activationName.length)
-            serializer.writeStringUTF8(activationName)
+            serializeActivation(serializer, this.activations[idx])
         }
     }
 }
@@ -168,14 +172,14 @@ class InnovationCounter {
         this.genomeCounter = genomeCounter
     }
 
-    static deserialize(deserializer, version) {
+    static deserialize(deserializer) {
         const innovationCounter = deserializer.readUint32LE()
         const neuronCounter = deserializer.readUint32LE()
         const genomeCounter = deserializer.readUint32LE()
         return new InnovationCounter(innovationCounter, neuronCounter, genomeCounter)
     }
 
-    serialize(serializer, version) {
+    serialize(serializer) {
         serializer.writeUint32LE(this.innovationCounter)
         serializer.writeUint32LE(this.neuronCounter)
         serializer.writeUint32LE(this.genomeCounter)
@@ -222,7 +226,7 @@ class ConnectionGene {
         )
     }
 
-    serialize(serializer, version) {
+    serialize(serializer) {
         serializer.writeUint32LE(this.innovationNumber)
         serializer.writeUint32LE(this.inputNeuronId)
         serializer.writeUint32LE(this.outputNeuronId)
@@ -230,13 +234,19 @@ class ConnectionGene {
         serializer.writeUint8(this.enabled)
     }
 
-    static deserialize(deserializer, version) {
+    static deserialize(deserializer) {
         const innovationNumber = deserializer.readUint32LE()
         const inputNeuronId = deserializer.readUint32LE()
         const outputNeuronId = deserializer.readUint32LE()
         const weight = deserializer.readFloat64LE()
         const enabled = deserializer.readUint8()
-        return new ConnectionGene(innovationNumber, inputNeuronId, outputNeuronId, weight, enabled)
+        return new ConnectionGene(
+            innovationNumber,
+            inputNeuronId,
+            outputNeuronId,
+            weight,
+            enabled
+        )
     }
 }
 
@@ -259,17 +269,14 @@ class NeuronGene {
         return new NeuronGene(this.neuronId, this.activation)
     }
 
-    serialize(serializer, version) {
+    serialize(serializer) {
         serializer.writeUint32LE(this.neuronId)
-        serializer.writeUint32LE(this.activation.name.length)
-        serializer.writeStringUTF8(this.activation.name)
+        serializeActivation(serializer, this.activation)
     }
 
-    static deserialize(deserializer, version) {
+    static deserialize(deserializer) {
         const neuronId = deserializer.readUint32LE()
-        const length = deserializer.readUint32LE()
-        const activationName = deserializer.readStringUTF8(length)
-        const activation = getActivationFunction(activationName)
+        const activation = deserializeActivation(deserializer)
         return new NeuronGene(neuronId, activation)
     }
 }
@@ -287,11 +294,10 @@ class Genome {
         this._neuronIdToIndex         = new Map()
     }
 
-    serialize(serializer, version) {
+    serialize(serializer) {
         serializer.writeUint32LE(this.genomeId)
         serializer.writeUint32LE(this.inputCount)
         serializer.writeUint32LE(this.outputCount)
-        serializer.writeFloat64LE(this.fitness)
 
         serializer.writeUint32LE(this.connectionGenes.length)
         for (let idx = 0; idx < this.connectionGenes.length; ++idx) {
@@ -304,39 +310,35 @@ class Genome {
         }
     }
 
-    static deserialize(deserializer, version) {
+    static deserialize(deserializer) {
         const genome = new Genome()
         genome.genomeId = deserializer.readUint32LE()
         genome.inputCount = deserializer.readUint32LE()
         genome.outputCount = deserializer.readUint32LE()
-        genome.fitness = deserializer.readFloat64LE()
 
         const connectionGenesCount = deserializer.readUint32LE()
         for (let idx = 0; idx < connectionGenesCount; ++idx) {
-            genome.connectionGenes.push(ConnectionGene.deserialize(deserializer))
+            genome.addConnectionGene(ConnectionGene.deserialize(deserializer))
         }
 
         const neuronGenesCount = deserializer.readUint32LE()
         for (let idx = 0; idx < neuronGenesCount; ++idx) {
-            genome.neuronGenes.push(NeuronGene.deserialize(deserializer))
+            genome.addNeuronGene(NeuronGene.deserialize(deserializer))
         }
-
-        genome._innovationNumberToIndex = new Map(genome.connectionGenes.map((e, i) => [ e.innovationNumber, i ]))
-        genome._neuronIdToIndex = new Map(genome.neuronGenes.map((e, i) => [ e.neuronId, i ]))
 
         return genome
     }
 
-    static from({ genomeId, inputCount, outputCount, connectionGenes, neuronGenes }) {
-        const result = new Genome(genomeId, inputCount, outputCount)
+    // static from({ genomeId, inputCount, outputCount, connectionGenes, neuronGenes }) {
+    //     const result = new Genome(genomeId, inputCount, outputCount)
 
-        result.connectionGenes            = connectionGenes
-        result.neuronGenes                = neuronGenes
-        result._innovationNumberToIndex   = new Map(connectionGenes.map((e, i) => [ e.innovationNumber, i ]))
-        result._neuronIdToIndex           = new Map(neuronGenes.map((e, i) => [ e.neuronId, i ]))
+    //     result.connectionGenes            = connectionGenes
+    //     result.neuronGenes                = neuronGenes
+    //     result._innovationNumberToIndex   = new Map(connectionGenes.map((e, i) => [ e.innovationNumber, i ]))
+    //     result._neuronIdToIndex           = new Map(neuronGenes.map((e, i) => [ e.neuronId, i ]))
 
-        return result
-    }
+    //     return result
+    // }
 
     static compatibilityDistance(dominant, recessive, config) {
         let excessGenes = 0
@@ -785,7 +787,7 @@ class Genome {
 
     mutateWeightsGaussian(config) {
         for (let idx = 0; idx < this.connectionGenes.length; ++idx) {
-            if (Math.random() < config.mutateWeightsGaussianRate) {
+            if (Math.random() < config.weightGaussianMutationRate) {
                 this.connectionGenes[idx].weight += config.changeWeightRange * normal()
             }
         }
@@ -793,7 +795,7 @@ class Genome {
 
     mutateWeightsUniform(config) {
         for (let idx = 0; idx < this.connectionGenes.length; ++idx) {
-            if (Math.random() < config.mutateWeightsUniformRate) {
+            if (Math.random() < config.weightUniformMutationRate) {
                 this.connectionGenes[idx].weight = config.randomWeightRange * uniform()
             }
         }
@@ -805,30 +807,31 @@ class Genome {
         }
 
         this.mutateWeightsGaussian(config)
+        this.mutateWeightsUniform(config)
 
-        if (Math.random() < config.mutateAddConnectionRate) {
+        if (Math.random() < config.addConnectionMutationRate) {
             this.mutateAddConnection(config, innovationCounter)
         }
         
-        if (Math.random() < config.mutateRemoveConnectionRate) {
+        if (Math.random() < config.removeConnectionMutationRate) {
             this.mutateRemoveConnection(config)
         }
         
-        if (Math.random() < config.mutateAddNeuronRate) {
+        if (Math.random() < config.addNeuronMutationRate) {
             this.mutateAddNeuron(config, innovationCounter)
         }
         
-        if (Math.random() < config.mutateRemoveNeuronRate) {
+        if (Math.random() < config.removeNeuronMutationRate) {
             this.mutateRemoveNeuron(config)
         }
+
+        // if (Math.random() < config.mutateChangeWeightRate) {
+        //     this.mutateChangeWeight(config)
+        // }
         
-        if (Math.random() < config.mutateChangeWeightRate) {
-            this.mutateChangeWeight(config)
-        }
-        
-        if (Math.random() < config.mutateSetWeightRate) {
-            this.mutateSetWeight(config)
-        }
+        // if (Math.random() < config.mutateSetWeightRate) {
+        //     this.mutateSetWeight(config)
+        // }
 
         return this
     }
@@ -874,13 +877,12 @@ class Species {
         throw new Error(`Selected a genome from outside the array bounds! randomFitness: ${randomFitness} totalFitness: ${this.totalFitness}`)
     }
 
-    static deserialize(deserializer, version, genomeMap) {
+    static deserialize(deserializer, genomeMap) {
         const species = new Species()
 
-        species.totalFitness = deserializer.readFloat64LE()
         const leaderGenomeId = deserializer.readUint32LE()
         species.leader = genomeMap.get(leaderGenomeId)
-
+        
         if (species.leader === null || species.leader === undefined) {
             throw new Error(`Cannot find the genome of ID (${leaderGenomeId}) when deserializing Species!`)
         }
@@ -903,8 +905,7 @@ class Species {
         return species
     }
 
-    serialize(serializer, version) {
-        serializer.writeFloat64LE(this.totalFitness)
+    serialize(serializer) {
         serializer.writeUint32LE(this.leader.genomeId)
 
         serializer.writeUint32LE(this.members.length)
@@ -934,13 +935,13 @@ class Population {
         this.specifyGenomes()
     }
 
-    static deserialize(deserializer, version) {
+    static deserialize(deserializer) {
         const population = new Population()
 
         population.populationCount = deserializer.readUint32LE()
         population.generationCount = deserializer.readUint32LE()
-        population.innovationCounter = InnovationCounter.deserialize(deserializer, version)
-        population.config = Configuration.deserialize(deserializer, version)
+        population.innovationCounter = InnovationCounter.deserialize(deserializer)
+        population.config = Configuration.deserialize(deserializer)
 
         const genomeMap = new Map()
 
@@ -953,16 +954,13 @@ class Population {
 
         const speciesCount = deserializer.readUint32LE()
         for (let idx = 0; idx < speciesCount; ++idx) {
-            population.species.push(Species.deserialize(deserializer, version, genomeMap))
+            population.species.push(Species.deserialize(deserializer, genomeMap))
         }
 
         return population
     }
 
-    serialize(serializer, version = POPULATION_FILE_VERSION0) {
-        serializer.writeUint32LE(POPULATION_FILE_SIGNATURE)
-        serializer.writeUint32LE(version)
-        
+    serialize(serializer) {
         serializer.writeUint32LE(this.populationCount)
         serializer.writeUint32LE(this.generationCount)
         this.innovationCounter.serialize(serializer)
@@ -1129,217 +1127,13 @@ class NeuralNetwork {
 
 function readPopulationFile(bytes) {
     const deserializer = new BinaryDeserializer(bytes)
-
-    const signature = deserializer.readUint32LE()
-    if (signature !== POPULATION_FILE_SIGNATURE) {
-        throw new Error("Population file signature incorrect!")
-    }
-
-    const version = deserializer.readUint32LE()
-    if (version > POPULATION_FILE_HIGHEST_VERSION) {
-        throw new Error("Population file version invalid!")
-    }
-
-    return Population.deserialize(deserializer, version)
+    return Population.deserialize(deserializer)
 }
 
-function createPopulationFile(population, version) {
-    const serializer = new BinarySerializer()
-    serializer.writeUint32LE(POPULATION_FILE_SIGNATURE)
-    serializer.writeUint32LE(version)
-    population.serialize(serializer, version)
-    return serializer.bytes()
-}
-
-function serializePopulationVersion1(serializer, population) {
-    // 
-    // Write the file signature and version
-    // 
-    serializer.writeUint32LE(POPULATION_FILE_SIGNATURE)
-    serializer.writeUint32LE(POPULATION_FILE_VERSION1)
-
-    // 
-    // Write the population count and generation number
-    // 
-    serializer.writeUint32LE(population.populationCount)
-    serializer.writeUint32LE(population.generationCount)
-
-    // 
-    // Serialize the innovation counter.
-    // 
-    serializer.writeUint32LE(population.innovationCounter.innovationCounter)
-    serializer.writeUint32LE(population.innovationCounter.neuronCounter)
-    serializer.writeUint32LE(population.innovationCounter.genomeCounter)
-    // serializer.writeUint32LE(0)
-
-    // 
-    // Serialize the population configuration.
-    // 
-    serializer.writeFloat64LE(population.config.excessGeneCoefficient)
-    serializer.writeFloat64LE(population.config.disjointGeneCoefficient)
-    serializer.writeFloat64LE(population.config.weightDifferenceCoefficient)
-    serializer.writeFloat64LE(population.config.compatibilityThreshold)
-    serializer.writeFloat64LE(population.config.addConnectionMutationRate)
-    serializer.writeFloat64LE(population.config.removeConnectionMutationRate)
-    serializer.writeFloat64LE(population.config.addNeuronMutationRate)
-    serializer.writeFloat64LE(population.config.removeNeuronMutationRate)
-    serializer.writeFloat64LE(population.config.weightGaussianMutationRate)
-    serializer.writeFloat64LE(population.config.weightUniformMutationRate)
-    serializer.writeFloat64LE(population.config.addConnectionAttepmpts)
-    serializer.writeFloat64LE(population.config.randomWeightRange)
-    serializer.writeFloat64LE(population.config.changeWeightRange)
-
-    // 
-    // Serialize the names of the possible activation
-    // functions within the configuration.
-    // 
-    serializer.writeUint32LE(population.config.activations.length)
-    for (let idx = 0; idx < population.config.activations.length; ++idx) {
-        const activationName = population.config.activations[idx].name;
-
-        if (activationName.length > 0xFF) {
-            throw new Error("Activation function name too long cannot serialize!")
-        }
-
-        serializer.writeUint8(activationName.length)
-        serializer.writeStringUTF8(activationName)
-    }
-
-    serializer.writeUint32LE(population.species.length)
-    for (let idx = 0; idx < population.species.length; ++idx) {
-    }
-
-    const speciesToIndexMap = new Map(population.species.map((species, idx) => [species, idx]))
-
-    serializer.writeUint32LE(population.genomes.length)
-    for (let idx = 0; idx < population.genomes.length; ++idx) {
-        const genome = population.genomes[idx]
-        const speciesIndex = speciesToIndexMap.get(population.genomes.species)
-
-        serializer.writeUint32LE(genome.genomeId)
-        serializer.writeUint32LE(genome.inputCount)
-        serializer.writeUint32LE(genome.outputCount)
-        serializer.writeUint32LE(speciesIndex)
-        serializer.writeFloat64LE(genome.fitness)
-
-        serializer.writeUint32LE(genome.connectionGenes.length)
-        for (let idx = 0; idx < genome.connectionGenes.length; ++idx) {
-            const connectionGene = genome.connectionGenes[idx]
-
-            serializer.writeUint32LE(connectionGene.innovationNumber)
-            serializer.writeUint32LE(connectionGene.inputNeuronId)
-            serializer.writeUint32LE(connectionGene.outputNeuronId)
-            serializer.writeFloat64LE(connectionGene.weight)
-            serializer.writeUint8(connectionGene.enabled)
-        }
-
-        serializer.writeUint32LE(genome.neuronGenes.length)
-        for (let idx = 0; idx < genome.neuronGenes.length; ++idx) {
-            const neuronGene = genome.neuronGenes[idx]
-
-            serializer.writeUint32LE(neuronGene.neuronId)
-            serializer.writeUint32LE(neuronGene.activation.name.length)
-            serializer.writeStringUTF8(neuronGene.activation.name)
-        }
-    }
-}
-
-function serializePopulationVersion0(serializer, population) {
-    // 
-    // Write the file signature and version
-    // 
-    serializer.writeUint32LE(POPULATION_FILE_SIGNATURE)
-    serializer.writeUint32LE(POPULATION_FILE_VERSION0)
-
-    // 
-    // Write the population count and generation number
-    // 
-    serializer.writeUint32LE(population.populationCount)
-    serializer.writeUint32LE(population.generationCount)
-
-    // 
-    // Serialize the innovation counter.
-    // 
-    serializer.writeUint32LE(population.innovationCounter.innovationCounter)
-    serializer.writeUint32LE(population.innovationCounter.neuronCounter)
-    serializer.writeUint32LE(population.innovationCounter.genomeCounter)
-
-    // 
-    // Serialize the population configuration.
-    // 
-    serializer.writeFloat64LE(population.config.excessGeneCoefficient)
-    serializer.writeFloat64LE(population.config.disjointGeneCoefficient)
-    serializer.writeFloat64LE(population.config.weightDifferenceCoefficient)
-    serializer.writeFloat64LE(population.config.compatibilityThreshold)
-    serializer.writeFloat64LE(population.config.addConnectionMutationRate)
-    serializer.writeFloat64LE(population.config.removeConnectionMutationRate)
-    serializer.writeFloat64LE(population.config.addNeuronMutationRate)
-    serializer.writeFloat64LE(population.config.removeNeuronMutationRate)
-    serializer.writeFloat64LE(population.config.changeWeightMutationRate)
-    serializer.writeFloat64LE(population.config.setWeightMutationRate)
-    serializer.writeFloat64LE(population.config.weightGaussianMutationRate)
-    serializer.writeFloat64LE(population.config.weightUniformMutationRate)
-    serializer.writeFloat64LE(population.config.randomWeightRange)
-    serializer.writeFloat64LE(population.config.changeWeightRange)
-    serializer.writeFloat64LE(population.config.addConnectionAttepmpts)
-
-    // 
-    // Serialize the names of the possible activation
-    // function within the configuration.
-    // 
-    serializer.writeUint32LE(population.config.activations.length)
-    for (let idx = 0; idx < population.config.activations.length; ++idx) {
-        const activationName = population.config.activations[idx].name;
-        serializer.writeUint32LE(activationName.length)
-        serializer.writeStringUTF8(activationName)
-    }
-
-    // 
-    // Serialize the genomes of the population
-    // 
-    serializer.writeUint32LE(population.genomes.length)
-    for (let idx = 0; idx < population.genomes.length; ++idx) {
-        const genome = population.genomes[idx]
-
-        serializer.writeUint32LE(genome.genomeId)
-        serializer.writeUint32LE(genome.inputCount)
-        serializer.writeUint32LE(genome.outputCount)
-        serializer.writeFloat64LE(genome.fitness)
-
-        serializer.writeUint32LE(genome.connectionGenes.length)
-        for (let idx = 0; idx < genome.connectionGenes.length; ++idx) {
-            const connectionGene = genome.connectionGenes[idx]
-
-            serializer.writeUint32LE(connectionGene.innovationNumber)
-            serializer.writeUint32LE(connectionGene.inputNeuronId)
-            serializer.writeUint32LE(connectionGene.outputNeuronId)
-            serializer.writeFloat64LE(connectionGene.weight)
-            serializer.writeUint8(connectionGene.enabled)
-        }
-
-        serializer.writeUint32LE(genome.neuronGenes.length)
-        for (let idx = 0; idx < genome.neuronGenes.length; ++idx) {
-            const neuronGene = genome.neuronGenes[idx]
-
-            serializer.writeUint32LE(neuronGene.neuronId)
-            serializer.writeUint32LE(neuronGene.activation.name.length)
-            serializer.writeStringUTF8(neuronGene.activation.name)
-        }
-    }
-
-    // 
-    // Serialize the species of the population
-    // 
-    serializer.writeUint32LE(population.species.length)
-    for (let idx = 0; idx < population.species.length; ++idx) {
-        const species = population.species[idx]
-
-        serializer.writeFloat64LE(species.totalFitness)
-        serializer.writeUint32LE(species.leader.genomeId)
-
-        serializer.writeUint32LE(species.members.length)
-        for (let idx = 0; idx < species.members.length; ++idx) {
-            serializer.writeUint32LE(species.members[idx].genomeId)
-        }
-    }
-}
+// function createPopulationFile(population) {
+//     const serializer = new BinarySerializer()
+//     serializer.writeUint32LE(POPULATION_FILE_SIGNATURE)
+//     serializer.writeUint32LE(version)
+//     population.serialize(serializer)
+//     return serializer.bytes()
+// }

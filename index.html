@@ -4,12 +4,27 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NeuralNetwork</title>
+    <script type="text/javascript" src="source/vector2.js"></script>
     <script type="text/javascript" src="source/binarySerialization.js"></script>
+    <script type="text/javascript" src="source/graphRendering.js"></script>
     <script type="text/javascript" src="source/neat.js"></script>
     <script type="text/javascript" src="source/index.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <canvas id="canvas"></canvas>
+    <div class="content-container">
+        <canvas id="simulation-canvas"></canvas>
+        <div style="margin-top: 16px;">
+            <button class="button" id="save-button">Save Population</button>
+            <button class="button" id="save-as-button">Save Population As</button>
+            <button class="button" id="restore-button">Restore Population</button>
+            <button class="button" id="reset-button">Reset Population</button>
+        </div>
+        <div class="population-slider-container">
+            <label for="population-slider">Population Size:</label>
+            <input type="number" id="population-input" min="10" max="2500" value="500" step="1" style="width: 70px; margin-left: 12px;">
+            <input type="range" id="population-slider" min="10" max="2500" value="500" step="1">
+        </div>
+    </div>
 </body>
 </html>

@@ -2,13 +2,178 @@ html, body {
     margin: 0 !important;
     padding: 0 !important;
     overflow: hidden;
-    background-color: black;
+    background-color: #18191a;
+    font-family: 'Segoe UI', Arial, sans-serif;
 }
 
-canvas {
-    padding-left: 0;
-    padding-right: 0;
-    margin-left: auto;
-    margin-right: auto;
+.content-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.button {
+    font-weight: 700;
+    padding: 1.2rem 2.5rem;
+    border-radius: 0.75rem;
+    color: #FFD700;
+    border: 2px solid #FFD700;
+    background: linear-gradient(90deg, #232526 0%, #2A2B2D 100%);
+    box-shadow: 0 4px 16px rgba(255, 215, 0, 0.08), 0 1.5px 6px rgba(0,0,0,0.25);
+    cursor: pointer;
+    font-size: 1.1rem;
+    letter-spacing: 0.05em;
+    outline: none;
+    margin: 1.1rem;
+}
+
+.button:hover {
+    background: linear-gradient(90deg, #FFD700 0%, #FFA500 100%);
+    color: #18191a;
+    box-shadow: 0 6px 24px rgba(255, 215, 0, 0.18), 0 2px 8px rgba(0,0,0,0.30);
+    transition: box-shadow 0.5s, transform 0.25s;
+    transform: translateY(-2px) scale(1.05);
+}
+
+#simulation-canvas {
     display: block;
+    margin: 2rem auto;
+    width: 90vw;
+    max-width: 900px;
+    height: 60vh;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.35), 0 1.5px 6px rgba(255,215,0,0.08);
+}
+
+.population-slider-container {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 16px;
+    
+    font-weight: bold;
+    color: #FFD700;
+}
+
+#population-slider {
+    flex: 1 1 220px;
+    min-width: 180px;
+    max-width: 320px;
+    margin: 0;
+}
+
+#population-value {
+    display: inline-block;
+    min-width: 40px;
+    font-weight: bold;
+    color: #FFD700;
+    font-size: 1.2rem;
+    margin-left: 12px;
+    vertical-align: middle;
+}
+
+#population-slider {
+    -webkit-appearance: none;
+    width: 220px;
+    height: 1.2rem;
+    background: linear-gradient(90deg, #232526 0%, #2A2B2D 100%);
+    border: 2px solid #FFD700;
+    border-radius: 0.75rem;
+    outline: none;
+    margin-top: 0.7rem;
+    margin-bottom: 0.7rem;
+    box-shadow: 0 4px 16px rgba(255, 215, 0, 0.08), 0 1.5px 6px rgba(0,0,0,0.25);
+    transition: box-shadow 0.5s, transform 0.25s;
+}
+
+/* Style the slider thumb */
+#population-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    background: linear-gradient(90deg, #FFD700 0%, #FFA500 100%);
+    border: 2px solid #FFD700;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(255,215,0,0.18);
+    transition: background 0.3s;
+}
+
+#population-slider:focus::-webkit-slider-thumb {
+    outline: 2px solid #FFD700;
+}
+
+#population-slider::-moz-range-thumb {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    background: linear-gradient(90deg, #FFD700 0%, #FFA500 100%);
+    border: 2px solid #FFD700;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(255,215,0,0.18);
+    transition: background 0.3s;
+}
+
+#population-slider::-ms-thumb {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    background: linear-gradient(90deg, #FFD700 0%, #FFA500 100%);
+    border: 2px solid #FFD700;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(255,215,0,0.18);
+    transition: background 0.3s;
+}
+
+/* Remove default styles for Firefox */
+#population-slider::-moz-range-track {
+    background: transparent;
+    border: none;
+}
+
+#population-slider::-ms-fill-lower,
+#population-slider::-ms-fill-upper {
+    background: transparent;
+    border: none;
+}
+
+/* Hide outline on focus for all browsers */
+#population-slider:focus {
+    outline: none;
+}
+
+#population-value {
+    display: inline-block;
+    min-width: 40px;
+    font-weight: bold;
+    color: #FFD700; /* Match button text color */
+    font-size: 1.2rem;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+#population-input {
+    background: linear-gradient(90deg, #232526 0%, #2A2B2D 100%);
+    color: #FFD700;
+    border: 2px solid #FFD700;
+    border-radius: 0.75rem;
+    font-size: 1.1rem;
+    font-weight: bold;
+    padding: 0.4rem 0.8rem;
+    box-shadow: 0 2px 8px rgba(255, 215, 0, 0.08), 0 1.5px 6px rgba(0,0,0,0.15);
+    outline: none;
+    transition: box-shadow 0.3s, border-color 0.3s;
+    width: 70px;
+    margin-left: 12px;
+}
+
+
+#population-input::-webkit-outer-spin-button,
+#population-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+#population-input[type=number] {
+    -moz-appearance: textfield;
 }

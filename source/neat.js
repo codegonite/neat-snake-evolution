@@ -329,17 +329,6 @@ class Genome {
         return genome
     }
 
-    // static from({ genomeId, inputCount, outputCount, connectionGenes, neuronGenes }) {
-    //     const result = new Genome(genomeId, inputCount, outputCount)
-
-    //     result.connectionGenes            = connectionGenes
-    //     result.neuronGenes                = neuronGenes
-    //     result._innovationNumberToIndex   = new Map(connectionGenes.map((e, i) => [ e.innovationNumber, i ]))
-    //     result._neuronIdToIndex           = new Map(neuronGenes.map((e, i) => [ e.neuronId, i ]))
-
-    //     return result
-    // }
-
     static compatibilityDistance(dominant, recessive, config) {
         let excessGenes = 0
         let disjointGenes = 0
@@ -825,14 +814,6 @@ class Genome {
             this.mutateRemoveNeuron(config)
         }
 
-        // if (Math.random() < config.mutateChangeWeightRate) {
-        //     this.mutateChangeWeight(config)
-        // }
-        
-        // if (Math.random() < config.mutateSetWeightRate) {
-        //     this.mutateSetWeight(config)
-        // }
-
         return this
     }
 }
@@ -1123,17 +1104,41 @@ class NeuralNetwork {
 
         return this.outputNeurons
     }
+
+    predict(values) {
+        const outputs = this.process(values)
+
+        let indexOfHighestValue = 0
+        for (let idx = 1; idx < outputs.length; ++idx) {
+            if (outputs[idx].value > outputs[indexOfHighestValue].value) {
+                indexOfHighestValue = idx
+            }
+        }
+
+        return indexOfHighestValue
+    }
 }
 
 function readPopulationFile(bytes) {
     const deserializer = new BinaryDeserializer(bytes)
-    return Population.deserialize(deserializer)
+
+    const signature = deserializer.readUint32LE()
+    if (signature !== POPULATION_FILE_SIGNATURE) {
+        throw new Error("Population file signature incorrect!")
+    }
+
+    const version = deserializer.readUint32LE()
+    if (version > POPULATION_FILE_HIGHEST_VERSION) {
+        throw new Error("Population file version invalid!")
+    }
+
+    return Population.deserialize(deserializer, version)
 }
 
-// function createPopulationFile(population) {
-//     const serializer = new BinarySerializer()
-//     serializer.writeUint32LE(POPULATION_FILE_SIGNATURE)
-//     serializer.writeUint32LE(version)
-//     population.serialize(serializer)
-//     return serializer.bytes()
-// }
+function createPopulationFile(population, version) {
+    const serializer = new BinarySerializer()
+    serializer.writeUint32LE(POPULATION_FILE_SIGNATURE)
+    serializer.writeUint32LE(version)
+    population.serialize(serializer, version)
+    return serializer.bytes()
+}

@@ -4,7 +4,7 @@ This project implements the NEAT (NeuroEvolution of Augmenting Topologies) algor
 
 ## Overview
 
-This project demonstrates use of the NEAT algorithm to train neural networks. Through the use of the NEAT algorithm, Snake agents are able to learn strategies to survive and maximize its score without human assistance or interation. The visualization allows users to observe the learning process and experiment with different configurations.
+This project demonstrates use of the NEAT algorithm to train neural networks. Through the use of the NEAT algorithm, Snake agents are able to learn strategies to survive and maximize its score without human assistance or interaction. The visualization of the neural network's progress allows users to observe the learning process and experiment with different configurations.
 
 ![NEAT Snake Demo](https://github.com/codegonite/neat-snake-evolution/blob/master/assets/SnakeTrainingNEAT.gif)
 

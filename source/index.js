@@ -23,12 +23,12 @@ const SNAKE_UPDATE_RESULT_HIT_SELF = 0x02
 
 const SNAKE_NEURAL_NETWORK_BASE_TOPOLOGY = [ 33, 4 ]
 
-const TARGET_COLOUR = "#01796F"
-const SNAKE_COLOUR = "#FEFCFF"
-const GAME_BACKGROUND_COLOUR = "#2A2B2D"
-const GAME_GRID_LINE_COLOUR = "#1F1F1F"
-const GAME_TEXT_COLOUR = "#FFD700"
-const SIMULATION_BACKGROUND_COLOUR = "#0F0F0F"
+const TARGET_COLOR = "#01796F"
+const SNAKE_COLOR = "#FEFCFF"
+const GAME_BACKGROUND_COLOR = "#2A2B2D"
+const GAME_GRID_LINE_COLOR = "#1F1F1F"
+const GAME_TEXT_COLOR = "#FFD700"
+const SIMULATION_BACKGROUND_COLOR = "#0F0F0F"
 const GRAPH_SCORE_COLOR = "#FFA500"
 
 const config = new Configuration({
@@ -109,14 +109,14 @@ class Snake {
             const x = position.x + this.body[0].x * cellSize + halfCellSize
             const y = position.y + this.body[0].y * cellSize + halfCellSize
 
-            context.fillStyle = SNAKE_COLOUR
+            context.fillStyle = SNAKE_COLOR
             context.beginPath()
             context.ellipse(x, y, snakeRadius, snakeRadius, 0, 0, 2 * Math.PI, false)
             context.fill()
             return
         }
 
-        context.strokeStyle = SNAKE_COLOUR
+        context.strokeStyle = SNAKE_COLOR
         context.lineWidth = 2 * snakeRadius
         context.lineCap = "round"
         context.beginPath()
@@ -288,7 +288,7 @@ class SnakeGame {
         const targetPositionX = position.x + this.targetPosition.x * cellSize + cellSize / 2
         const targetPositionY = position.y + this.targetPosition.y * cellSize + cellSize / 2
 
-        context.fillStyle = TARGET_COLOUR
+        context.fillStyle = TARGET_COLOR
         context.beginPath()
         context.ellipse(targetPositionX, targetPositionY, targetRadius, targetRadius, 0, 0, 2 * Math.PI, false)
         context.closePath()
@@ -300,16 +300,16 @@ class SnakeGame {
         context.fillRect(position.x, position.y, size.width, size.height)
 
         context.font = `${Math.floor(0.1 * size.width)}px Consolas`
-        context.fillStyle = GAME_TEXT_COLOUR
+        context.fillStyle = GAME_TEXT_COLOR
         context.textAlign = "center"
         context.fillText(text, position.x + size.width / 2, position.y + size.height / 2)
     }
 
     renderGameGrid(context, position, size, cellSize, gridLineWidth = 1) {
-        context.fillStyle = GAME_BACKGROUND_COLOUR
+        context.fillStyle = GAME_BACKGROUND_COLOR
         context.fillRect(position.x, position.y, size.width, size.height)
 
-        context.strokeStyle = GAME_GRID_LINE_COLOUR
+        context.strokeStyle = GAME_GRID_LINE_COLOR
         context.lineWidth = gridLineWidth
 
         context.beginPath()
@@ -376,7 +376,7 @@ class SnakeGame {
 
         context.font = `${excess}px Consolas`
         context.textAlign = "start"
-        context.fillStyle = GAME_TEXT_COLOUR
+        context.fillStyle = GAME_TEXT_COLOR
         context.fillText(`Score: ${this.score}`, position.x, position.y + size.height, size.width)
 
         if (this.state == SNAKE_GAME_STATE_GAME_OVER) {
@@ -526,10 +526,10 @@ class GraphSimulation {
     }
 
     render(context, position = new Vector2(0, 0), size = new Vector2(context.canvas.width, context.canvas.height)) {
-        context.fillStyle = GAME_BACKGROUND_COLOUR
+        context.fillStyle = GAME_BACKGROUND_COLOR
         context.fillRect(0, 0, size.x, size.y)
 
-        context.fillStyle = GAME_TEXT_COLOUR
+        context.fillStyle = GAME_TEXT_COLOR
         context.font = "36px monospace"
         context.textBaseline = "bottom"
 
@@ -550,11 +550,10 @@ class GraphSimulation {
         this.lineGraphRenderer.size.height = context.canvas.height - textHeight
 
         this.lineGraphRenderer.draw(context, this.bestScorePerGeneration, this.allTimeGenerationInfo.bestScore, GRAPH_SCORE_COLOR)
-        this.lineGraphRenderer.draw(context, this.averageScorePerGeneration, this.allTimeGenerationInfo.bestScore, SNAKE_COLOUR)
+        this.lineGraphRenderer.draw(context, this.averageScorePerGeneration, this.allTimeGenerationInfo.bestScore, SNAKE_COLOR)
         context.fillText(text, position.x, position.y + size.y, size.x)
 
         const remainingWidth = context.canvas.width - this.lineGraphRenderer.size.width
-        // const gameDisplaySize = Math.min(remainingWidth, this.lineGraphRenderer.size.height)
         const gameWidth = Math.min(remainingWidth, this.lineGraphRenderer.size.height / SNAKE_GAME_ASPECT)
         const gameOffset = 0.5 * (remainingWidth - gameWidth)
 
@@ -643,22 +642,20 @@ function main() {
         simulation = new GraphSimulation(population, snakeGame, Infinity)
     })
 
-    saveButton.onclick = function (event) {
-        const serializer = new BinarySerializer([])
-        simulation.population.serialize(serializer)
-        
-        const blob = new Blob([ serializer.arrayBuffer() ], { type: mimeType })
+    saveButton.addEventListener("click", (event) => {
+        const bytes = createPopulationFile(population)
+        const blob = new Blob([ bytes.buffer ], { type: mimeType })
         const link = document.createElement("a")
         link.href = URL.createObjectURL(blob)
         link.download = POPULATION_SUGGESTED_FILENAME
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)
-    }
+    })
 
-    saveAsButton.onclick = function (event) {
-        const serializer = new BinarySerializer([])
-        simulation.population.serialize(serializer)
+    saveAsButton.addEventListener("click", (event) => {
+        const bytes = createPopulationFile(population)
+        const blob = new Blob([ bytes.buffer ], { type: mimeType })
 
         try {
             window.showSaveFilePicker({
@@ -668,7 +665,6 @@ function main() {
                     accept: { [mimeType]: ['.bin'] },
                 }],
             }).then(handle => {
-                const blob = new Blob([ serializer.arrayBuffer() ], { type: mimeType })
                 handle.createWritable(blob).then(writable => {
                     writable.write().then(() => {
                         writable.close()
@@ -678,9 +674,9 @@ function main() {
         } catch (error) {
             console.error("Error saving file:", error)
         }
-    }
+    })
 
-    restoreButton.onclick = function (event) {
+    restoreButton.addEventListener("click", (event) => {
         const input = document.createElement("input")
         input.type = "file"
         document.body.appendChild(input)
@@ -705,14 +701,13 @@ function main() {
 
         input.click()
         document.body.removeChild(input)
-    }
+    })
 
     let requestId = null
     const loop = () => {
         requestId = requestAnimationFrame(loop)
         canvas.width = canvas.clientWidth
         canvas.height = canvas.clientHeight
-
 
         simulation.update()
         simulation.render(context)

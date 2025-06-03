@@ -13,7 +13,7 @@ This project demonstrates use of the NEAT algorithm to train neural networks. Th
 1. **Clone the repository:**
     ```bash
     git clone https://github.com/codegonite/neat-snake-evolution.git
-    cd neat-snake
+    cd neat-snake-evolution
     ```
 
 2. **Open `index.html` in your browser.**

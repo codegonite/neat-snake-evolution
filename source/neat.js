@@ -6,8 +6,6 @@ const POPULATION_FILE_VERSION0  = 0x00000000
 const POPULATION_FILE_VERSION1  = 0x00000001
 const POPULATION_FILE_HIGHEST_VERSION = POPULATION_FILE_VERSION1
 
-const GENOME_FILE_SIGNATURE = "GENOME  "
-
 function clamped(x) {
     return Math.max(Math.min(x, 1), 0)
 }
@@ -1132,13 +1130,13 @@ function readPopulationFile(bytes) {
         throw new Error("Population file version invalid!")
     }
 
-    return Population.deserialize(deserializer, version)
+    return Population.deserialize(deserializer)
 }
 
-function createPopulationFile(population, version) {
+function createPopulationFile(population) {
     const serializer = new BinarySerializer()
     serializer.writeUint32LE(POPULATION_FILE_SIGNATURE)
-    serializer.writeUint32LE(version)
-    population.serialize(serializer, version)
+    serializer.writeUint32LE(POPULATION_FILE_VERSION1)
+    population.serialize(serializer)
     return serializer.bytes()
 }

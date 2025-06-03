@@ -1,13 +1,14 @@
 class Alignment {
-    static bottomLeft = new ReadonlyVector2(0.0, 0.0)
-    static bottomCenter = new ReadonlyVector2(0.5, 0.0)
-    static bottomRight = new ReadonlyVector2(1.0, 0.0)
-    static centerLeft = new ReadonlyVector2(0.0, 0.5)
-    static center = new ReadonlyVector2(0.5, 0.5)
-    static centerRight = new ReadonlyVector2(1.0, 0.5)
-    static topLeft = new ReadonlyVector2(0.0, 1.0)
-    static topCenter = new ReadonlyVector2(0.5, 1.0)
-    static topRight = new ReadonlyVector2(1.0, 1.0)
+    static bottomLeft = new Alignment(0.0, 0.0)
+    static bottomCenter = new Alignment(0.5, 0.0)
+    static bottomRight = new Alignment(1.0, 0.0)
+    static centerLeft = new Alignment(0.0, 0.5)
+    static center = new Alignment(0.5, 0.5)
+    static centerRight = new Alignment(1.0, 0.5)
+    static topLeft = new Alignment(0.0, 1.0)
+    static topCenter = new Alignment(0.5, 1.0)
+    static topRight = new Alignment(1.0, 1.0)
+    constructor (x, y) { this.x = x; this.y = y; return Object.freeze(this) }
 }
 
 class LineGraphRenderer {
@@ -24,7 +25,6 @@ class LineGraphRenderer {
 
     #tempPosition0 = new Vector2(0, 0)
     #tempPosition1 = new Vector2(0, 0)
-    // #tempOffset    = new Vector2(0, 0)
 
     setLocalPositionToVector(vector = new Vector2(0, 0)) {
         vector.x = vector.x - this.size.x * this.alignment.x
@@ -97,6 +97,65 @@ class LineGraphRenderer {
             // context.lineTo(this.position.x, this.position.y)
 
             context.stroke()
+        }
+    }
+}
+
+class Dataset {
+    label = ""
+    data = []
+    color = "#00FF00"
+
+    render(context) {
+    }
+}
+
+class LineGraph {
+    datasets = []
+    backgroundColor = "#00FF00"
+    maximumDataPoints = 500
+
+    position = new Vector2(0.0, 0.0)
+    size = new Vector2(500.0, 500.0)
+    alignment = Alignment.center
+    gridLineStepCounts = new Vector2(0, 10)
+
+    gridLineColor = "#FFFFFF"
+
+    #tileSize = new Vector2(0, 0)
+
+    constructor (context) {
+        const canvas = context.canvas
+        /** @type {CanvasRenderingContext2D} */
+        this.context = context
+        this.canvas = canvas
+
+        canvas.addEventListener()
+    }
+
+    render() {
+        this.context.fillStyle = this.backgroundColor
+        this.context.fillRect(0, 0, this.size.x, this.size.y)
+
+        if (this.shouldDisplayGridlines) {
+            this.context.beginPath()
+            this.#tileSize.divVectors(this.size, this.gridLineStepCounts)
+
+            for (let col = 0; col < this.gridLineStepCounts.x; ++col) {
+                this.context.moveTo(col * this.#tileSize.x, row * this.#tileSize.y)
+                this.context.lineTo(col * this.#tileSize.x, row * this.#tileSize.y)
+            }
+
+            for (let row = 0; row < this.gridLineStepCounts.y; ++row) {
+                this.context.moveTo(col * this.#tileSize.x, row * this.#tileSize.y)
+                this.context.lineTo(col * this.#tileSize.x, row * this.#tileSize.y)
+            }
+
+            this.context.stroke()
+        }
+
+        for (let idx = 0; idx < this.datasets.length; ++idx) {
+            this.datasets[idx].render()
         }
     }
 }

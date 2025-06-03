@@ -73,10 +73,3 @@ class Vector2 {
         return this.mulScalar(1 / Math.sqrt(length_squared))
     }
 }
-
-class ReadonlyVector2 extends Vector2 {
-    constructor (x, y) {
-        super(x, y)
-        return Object.freeze(this)
-    }
-}

@@ -10,7 +10,7 @@ function clamped(x) {
     return Math.max(Math.min(x, 1), 0)
 }
 
-function sigmod(x) {
+function sigmoid(x) {
     return 1 / (1 + Math.exp(-x))
 }
 
@@ -54,7 +54,8 @@ function normal() {
 function getActivationFunction(name) {
     switch (name) {
         case "clamped": return clamped
-        case "sigmod": return sigmod
+        case "sigmod": return sigmoid
+        case "sigmoid": return sigmoid
         case "cube": return cube
         case "exp": return exp
         case "relu": return relu
@@ -94,10 +95,10 @@ class Configuration {
         removeNeuronMutationRate = 0.1,
         weightGaussianMutationRate = 0.1,
         weightUniformMutationRate = 0.1,
-        addConnectionAttepmpts = 1,
+        addConnectionAttempts = 1,
         randomWeightRange = 2.0,
         changeWeightRange = 2.0,
-        activations = [ sigmod ],
+        activations = [ sigmoid ],
     } = {}) {
         this.excessGeneCoefficient = excessGeneCoefficient
         this.disjointGeneCoefficient = disjointGeneCoefficient
@@ -111,7 +112,7 @@ class Configuration {
         this.weightUniformMutationRate = weightUniformMutationRate
         this.randomWeightRange = randomWeightRange
         this.changeWeightRange = changeWeightRange
-        this.addConnectionAttepmpts = addConnectionAttepmpts
+        this.addConnectionAttempts = addConnectionAttempts
         this.activations = activations
     }
 
@@ -129,7 +130,7 @@ class Configuration {
             weightUniformMutationRate: deserializer.readFloat64LE(),
             randomWeightRange: deserializer.readFloat64LE(),
             changeWeightRange: deserializer.readFloat64LE(),
-            addConnectionAttepmpts: deserializer.readFloat64LE(),
+            addConnectionAttempts: deserializer.readFloat64LE(),
             activations: [],
         }
 
@@ -154,7 +155,7 @@ class Configuration {
         serializer.writeFloat64LE(this.weightUniformMutationRate)
         serializer.writeFloat64LE(this.randomWeightRange)
         serializer.writeFloat64LE(this.changeWeightRange)
-        serializer.writeFloat64LE(this.addConnectionAttepmpts)
+        serializer.writeFloat64LE(this.addConnectionAttempts)
 
         serializer.writeUint32LE(this.activations.length)
         for (let idx = 0; idx < this.activations.length; ++idx) {
@@ -690,7 +691,7 @@ class Genome {
     }
 
     mutateAddConnection(config, innovationCounter) {
-        for (let idx = 0; idx < config.addConnectionAttepmpts; ++idx) {
+        for (let idx = 0; idx < config.addConnectionAttempts; ++idx) {
             const inputNeuron  = choice(this.neuronGenes, this.neuronGenes.length - this.outputCount)
             const outputNeuron = choice(this.neuronGenes, this.neuronGenes.length - this.inputCount, this.inputCount)
 

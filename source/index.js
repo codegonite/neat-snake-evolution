@@ -31,6 +31,8 @@ const GAME_TEXT_COLOR = "#FFD700"
 const SIMULATION_BACKGROUND_COLOR = "#0F0F0F"
 const GRAPH_SCORE_COLOR = "#FFA500"
 
+const binaryMimeType = "application/octet-stream"
+
 const config = new Configuration({
     excessGeneCoefficient: 5.0,
     disjointGeneCoefficient: 5.0,
@@ -45,8 +47,8 @@ const config = new Configuration({
     weightUniformMutationRate: 0.00,
     randomWeightRange: 1.0,
     changeWeightRange: 1.0,
-    addConnectionAttepmpts: 1,
-    activations: [ sigmod ],
+    addConnectionAttempts: 1,
+    activations: [ sigmoid ],
 })
 
 class Snake {
@@ -539,10 +541,11 @@ class GraphSimulation {
         const populationCount = this.population.populationCount
         const avgNeuronCount = Math.round(this.prevGenerationInfo.averageNeuronCount)
         const speciesCount = this.population.species.length
+        const averageScore = this.prevGenerationInfo.averageScore
 
         const text = `Generation #${generationNumber} | Generation best score: ${bestScore} | `
-        +            `All time high score: ${highScore} | Population count: ${populationCount} | `
-        +            `Avg neuron count: ${avgNeuronCount} | Species Count: ${speciesCount}`
+        +            `All time high score: ${highScore} | Avg score: ${averageScore} | `
+        +            `Population count: ${populationCount} | Avg neuron count: ${avgNeuronCount} | Species Count: ${speciesCount}`
         const metrics = context.measureText(text)
         const textHeight = metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent
 
@@ -593,6 +596,39 @@ class GraphSimulation {
     }
 }
 
+// 
+// Strictly for debugging and fixing file formats
+// 
+async function refreshPopulationFile() {
+    const FILE_PICKER_OPTIONS = {
+        suggestedName: POPULATION_SUGGESTED_FILENAME,
+        types: [
+            {
+                description: 'Binary Files',
+                accept: { [binaryMimeType]: ['.bin'] },
+            },
+        ],
+    }
+
+    const handles = await showOpenFilePicker(FILE_PICKER_OPTIONS)
+    const file = await handles[0].getFile()
+    const bytes = new Uint8Array(await file.arrayBuffer())
+    const contents = createPopulationFile(readPopulationFile(bytes))
+
+    const writeHandle = await showSaveFilePicker({
+        suggestedName: POPULATION_SUGGESTED_FILENAME,
+        types: [{
+            description: 'Binary Files',
+            accept: { [binaryMimeType]: ['.bin'] },
+        }],
+    })
+
+    const blob = new Blob([ contents ], { type: binaryMimeType })
+    const writable = await writeHandle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+}
+
 function main() {
     const canvas = document.getElementById("simulation-canvas")
     const context = canvas.getContext("2d")
@@ -605,13 +641,12 @@ function main() {
     const populationSlider = document.getElementById("population-slider")
 
     const innovationCounter = new InnovationCounter()
-    const startingGenome = Genome.fromTopology(SNAKE_NEURAL_NETWORK_BASE_TOPOLOGY, sigmod, innovationCounter)
+    const startingGenome = Genome.fromTopology(SNAKE_NEURAL_NETWORK_BASE_TOPOLOGY, sigmoid, innovationCounter)
 
     const population = new Population(500, startingGenome, innovationCounter, config)
 
     const snakeGame = new SnakeGame(10, 10)
     let simulation = new GraphSimulation(population, snakeGame, Infinity)
-    const mimeType = "application/octet-stream"
 
     const populationSliderMin = Number(populationSlider.min)
     const populationSliderMax = Number(populationSlider.max)
@@ -636,7 +671,7 @@ function main() {
 
     resetButton.addEventListener("click", () => {
         const innovationCounter = new InnovationCounter()
-        const startingGenome = Genome.fromTopology(SNAKE_NEURAL_NETWORK_BASE_TOPOLOGY, sigmod, innovationCounter)
+        const startingGenome = Genome.fromTopology(SNAKE_NEURAL_NETWORK_BASE_TOPOLOGY, sigmoid, innovationCounter)
         const population = new Population(500, startingGenome, innovationCounter, config)
 
         simulation = new GraphSimulation(population, snakeGame, Infinity)
@@ -644,7 +679,7 @@ function main() {
 
     saveButton.addEventListener("click", (event) => {
         const bytes = createPopulationFile(population)
-        const blob = new Blob([ bytes.buffer ], { type: mimeType })
+        const blob = new Blob([ bytes.buffer ], { type: binaryMimeType })
         const link = document.createElement("a")
         link.href = URL.createObjectURL(blob)
         link.download = POPULATION_SUGGESTED_FILENAME
@@ -653,25 +688,27 @@ function main() {
         document.body.removeChild(link)
     })
 
-    saveAsButton.addEventListener("click", (event) => {
+    saveAsButton.addEventListener("click", async (event) => {
         const bytes = createPopulationFile(population)
-        const blob = new Blob([ bytes.buffer ], { type: mimeType })
+        const blob = new Blob([ bytes.buffer ], { type: binaryMimeType })
+
+        console.log(bytes)
+        console.log(blob)
 
         try {
-            window.showSaveFilePicker({
+            const handle = await showSaveFilePicker({
                 suggestedName: POPULATION_SUGGESTED_FILENAME,
                 types: [{
                     description: 'Binary Files',
-                    accept: { [mimeType]: ['.bin'] },
+                    accept: { [binaryMimeType]: ['.bin'] },
                 }],
-            }).then(handle => {
-                handle.createWritable(blob).then(writable => {
-                    writable.write().then(() => {
-                        writable.close()
-                    })
-                })
             })
-        } catch (error) {
+
+            const writable = await handle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+        }
+        catch (error) {
             console.error("Error saving file:", error)
         }
     })

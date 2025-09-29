@@ -19,7 +19,7 @@ class LineGraphRenderer {
     axisY                  = new Vector2(0.0, 1.0)
     maximumDataPoints      = 500
 
-    shouldDisplayGridlines = true
+    shouldDisplayGridLines = true
 
     gridLineColor = "#FFFFFF"
 
@@ -39,8 +39,8 @@ class LineGraphRenderer {
             return
         }
 
-        const noramlizationFactor = 1.0 / highestValue
-        const verticalScale = this.size.height * noramlizationFactor
+        const normalizationFactor = 1.0 / highestValue
+        const verticalScale = this.size.height * normalizationFactor
         const horizontalScale = this.size.width
 
         context.strokeStyle = color
